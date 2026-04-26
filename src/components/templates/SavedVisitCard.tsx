@@ -56,6 +56,7 @@ export function SavedVisitCard({ visit, onView, patient: patientProp }: Props) {
       },
       guidelines_selected: visit.guidelines_used ?? [],
       generated_template: null,
+      tone: 'standard',
     })
     navigate('/visit/new')
   }

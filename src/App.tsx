@@ -10,6 +10,7 @@ import { Guidelines } from '@/pages/Guidelines'
 import { Patients } from '@/pages/Patients'
 import { NewVisit } from '@/pages/NewVisit'
 import { Templates } from '@/pages/Templates'
+import { PatientChart } from '@/pages/PatientChart'
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="patients" element={<Patients />} />
             <Route path="visit/new" element={<NewVisit />} />
             <Route path="templates" element={<Templates />} />
+            <Route path="chart" element={<PatientChart />} />
           </Route>
         </Routes>
       </AuthProvider>

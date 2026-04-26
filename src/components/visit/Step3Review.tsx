@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button'
 import { usePatients } from '@/hooks/usePatients'
 import { useGuidelines } from '@/hooks/useGuidelines'
 import { useGenerateVisit } from '@/hooks/useGenerateVisit'
-import { VISIT_TYPE_LABELS, symptomLabel } from '@/lib/visits'
+import { VISIT_TYPE_LABELS, symptomLabel, TONE_LABELS } from '@/lib/visits'
 import { conditionLabel } from '@/lib/patients'
-import type { VisitDraft } from '@/lib/visits'
+import type { Tone, VisitDraft } from '@/lib/visits'
+import { Select } from '@/components/ui/select'
 import { GeneratedTemplate } from './GeneratedTemplate'
 
 interface Props {
@@ -157,6 +158,30 @@ export function Step3Review({ draft, update }: Props) {
             ))}
           </div>
         )}
+      </section>
+
+      <section className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4">
+        <label className="text-sm font-semibold text-text">
+          טון השבלונה
+        </label>
+        <Select
+          value={draft.tone}
+          onChange={(e) =>
+            update({
+              tone: e.target.value as Tone,
+              generated_template: null,
+            })
+          }
+        >
+          {(Object.keys(TONE_LABELS) as Tone[]).map((t) => (
+            <option key={t} value={t}>
+              {TONE_LABELS[t]}
+            </option>
+          ))}
+        </Select>
+        <p className="text-xs text-text-muted">
+          שינוי הטון יחייב יצירה מחדש של השבלונה.
+        </p>
       </section>
 
       <div className="flex flex-col gap-2">

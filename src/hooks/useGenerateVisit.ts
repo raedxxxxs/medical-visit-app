@@ -39,6 +39,7 @@ export function useGenerateVisit() {
             visit_date: draft.visit_date,
             guideline_ids: draft.guidelines_selected,
             patient_summary,
+            tone: draft.tone,
           },
         },
       )

@@ -6,6 +6,7 @@ import {
   Users,
   FilePlus2,
   FileText,
+  FolderHeart,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -15,6 +16,7 @@ const navItems = [
   { to: '/patients', label: 'מטופלים', icon: Users },
   { to: '/visit/new', label: 'ביקור חדש', icon: FilePlus2 },
   { to: '/templates', label: 'שבלונות', icon: FileText },
+  { to: '/chart', label: 'סיכום תיק מטופל', icon: FolderHeart },
 ]
 
 export function Sidebar({

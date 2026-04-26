@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useRef,
   useState,
   type ChangeEvent,
@@ -71,6 +72,26 @@ export function PatientImageUpload({
     const files = Array.from(e.dataTransfer.files ?? [])
     await processFiles(files)
   }
+
+  useEffect(() => {
+    const onPaste = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items
+      if (!items) return
+      const files: File[] = []
+      for (const item of items) {
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+          const f = item.getAsFile()
+          if (f) files.push(f)
+        }
+      }
+      if (files.length === 0) return
+      e.preventDefault()
+      await processFiles(files)
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const MAX_IMAGE_MB = 10
   const MAX_IMAGES = 10
@@ -264,8 +285,7 @@ export function PatientImageUpload({
         )}
       >
         <Upload className="h-4 w-4" />
-        גרור תמונות לכאן (אפשר כמה ביחד) — שדות מלאים לא יידרסו, מחלות ותרופות
-        יתווספו
+        גרור תמונות, או הדבק (Ctrl+V). שדות מלאים לא יידרסו; מחלות ותרופות יתווספו
       </div>
 
       {error && (

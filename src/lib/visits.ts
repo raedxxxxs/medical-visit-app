@@ -50,6 +50,14 @@ export interface Anamnesis {
   free_text?: string
 }
 
+export type Tone = 'standard' | 'first_person' | 'educational'
+
+export const TONE_LABELS: Record<Tone, string> = {
+  standard: 'מקצועי (ברירת מחדל)',
+  first_person: 'גוף ראשון (אני ממליץ...)',
+  educational: 'הסבר לימודי',
+}
+
 export interface VisitDraft {
   patient_id: string | null
   visit_type: VisitType | null
@@ -60,6 +68,7 @@ export interface VisitDraft {
   anamnesis: Anamnesis
   guidelines_selected: string[]
   generated_template: string | null
+  tone: Tone
 }
 
 export const SYMPTOM_OPTIONS = [
@@ -133,5 +142,6 @@ export function emptyDraft(): VisitDraft {
     anamnesis: { symptoms: [] },
     guidelines_selected: [],
     generated_template: null,
+    tone: 'standard',
   }
 }
