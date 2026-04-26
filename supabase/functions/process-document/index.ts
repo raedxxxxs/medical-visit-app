@@ -198,8 +198,8 @@ async function callAnthropicWithRetry(args: {
   system: string
   content: unknown[]
 }): Promise<Response> {
-  const TIMEOUT_MS = 60_000
-  const MAX_ATTEMPTS = 3
+  const TIMEOUT_MS = 25_000
+  const MAX_ATTEMPTS = 2
   let lastErr: unknown
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const controller = new AbortController()
