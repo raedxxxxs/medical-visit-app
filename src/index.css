@@ -1,0 +1,67 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: 'Heebo', system-ui, -apple-system, sans-serif;
+
+  /* Medical palette: teal-blue primary, accents */
+  --color-primary-50: #eefdfd;
+  --color-primary-100: #d2f8f9;
+  --color-primary-200: #aaeff2;
+  --color-primary-300: #6fdfe7;
+  --color-primary-400: #36c5d2;
+  --color-primary-500: #1ba8b8;
+  --color-primary-600: #16879b;
+  --color-primary-700: #176c7e;
+  --color-primary-800: #185868;
+  --color-primary-900: #194a58;
+
+  --color-success: #16a34a;
+  --color-warning: #f59e0b;
+  --color-danger: #dc2626;
+}
+
+/* Light theme (default) — semantic tokens */
+:root {
+  --color-surface: #ffffff;
+  --color-muted: #f8fafc;
+  --color-border: #e2e8f0;
+  --color-text: #0f172a;
+  --color-text-muted: #64748b;
+}
+
+/* Dark theme */
+.dark {
+  --color-surface: #1e293b;
+  --color-muted: #0f172a;
+  --color-border: #334155;
+  --color-text: #f1f5f9;
+  --color-text-muted: #94a3b8;
+}
+
+@theme inline {
+  --color-surface: var(--color-surface);
+  --color-muted: var(--color-muted);
+  --color-border: var(--color-border);
+  --color-text: var(--color-text);
+  --color-text-muted: var(--color-text-muted);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background-color: var(--color-muted);
+  color: var(--color-text);
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
