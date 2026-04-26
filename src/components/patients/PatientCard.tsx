@@ -78,6 +78,7 @@ export function PatientCard({ patient }: { patient: Patient }) {
           size="sm"
           onClick={() => setIsEditing(true)}
           title="ערוך"
+          aria-label="ערוך מטופל"
         >
           <Pencil className="h-4 w-4" />
         </Button>
@@ -87,6 +88,7 @@ export function PatientCard({ patient }: { patient: Patient }) {
           onClick={handleDelete}
           disabled={del.isPending}
           title="מחק"
+          aria-label="מחק מטופל"
         >
           {del.isPending ? (
             <Loader2 className="h-4 w-4 animate-spin" />

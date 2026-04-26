@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -23,6 +24,18 @@ export function Sidebar({
   isOpen: boolean
   onClose: () => void
 }) {
+  // Lock body scroll when mobile sidebar is open
+  useEffect(() => {
+    if (!isOpen) return
+    const isMobile = window.matchMedia('(max-width: 767px)').matches
+    if (!isMobile) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [isOpen])
+
   return (
     <>
       {/* Backdrop on mobile when sidebar is open */}
@@ -36,6 +49,8 @@ export function Sidebar({
       )}
       <aside
         className={cn(
+          // In RTL the sidebar lives on the right, so its content-facing edge is on the LEFT.
+          // border-l puts the visible border between sidebar and main content.
           'fixed inset-y-0 right-0 z-40 w-60 shrink-0 border-l border-border bg-surface transition-transform md:static md:translate-x-0',
           isOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0',
         )}

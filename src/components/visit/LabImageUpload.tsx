@@ -72,10 +72,11 @@ export function LabImageUpload({ draft, update }: Props) {
   const MAX_IMAGES = 10
 
   const processFiles = async (rawFiles: File[]) => {
-    if (extract.isPending) return // guard against re-entry
+    // Reset visible state first so stale messages don't linger
     setError(null)
     setAppliedKeys([])
     setProgress(null)
+    if (extract.isPending) return // guard against re-entry
     // Filter + validate
     const heicCount = rawFiles.filter(
       (f) => /heic|heif/i.test(f.type) || /\.hei[cf]$/i.test(f.name),

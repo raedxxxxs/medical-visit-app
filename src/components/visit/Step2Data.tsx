@@ -35,7 +35,9 @@ const VITAL_FIELDS: { key: keyof Vitals; label: string; unit?: string }[] = [
 
 function isOutOfBounds(key: string, value: string): boolean {
   if (!value.trim()) return false
-  const n = Number(value)
+  // Accept comma as decimal separator (Hebrew/EU users)
+  const normalized = value.replace(',', '.')
+  const n = Number(normalized)
   if (Number.isNaN(n)) return true
   const b = LAB_BOUNDS[key]
   if (!b) return false

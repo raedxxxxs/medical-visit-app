@@ -131,6 +131,7 @@ export function GuidelineCard({ guideline }: { guideline: Guideline }) {
           onClick={handleView}
           disabled={isOpening}
           title="צפה ב-PDF"
+          aria-label="צפה ב-PDF"
         >
           {isOpening ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -144,6 +145,7 @@ export function GuidelineCard({ guideline }: { guideline: Guideline }) {
           onClick={handleDelete}
           disabled={del.isPending}
           title="מחק"
+          aria-label="מחק הנחיה"
         >
           {del.isPending ? (
             <Loader2 className="h-4 w-4 animate-spin" />

@@ -134,6 +134,10 @@ Deno.serve(async (req) => {
     const { image_base64, media_type, mode } = body
 
     if (!image_base64) return json({ error: 'חסרה תמונה' }, 400)
+    // Reject huge base64 payloads (10MB raw → ~13.3MB base64). DoS guard.
+    if (image_base64.length > 14_000_000) {
+      return json({ error: 'התמונה גדולה מדי' }, 413)
+    }
     if (mode !== 'labs' && mode !== 'medications' && mode !== 'patient') {
       return json(
         { error: 'mode חייב להיות labs / medications / patient' },
@@ -172,7 +176,13 @@ Deno.serve(async (req) => {
       ],
     })
 
-    const claudeData = await anthropicRes.json()
+    let claudeData: any
+    try {
+      claudeData = await anthropicRes.json()
+    } catch (parseErr) {
+      console.error('Failed to parse Anthropic response as JSON', parseErr)
+      return json({ error: 'תגובה לא תקינה מ-Claude' }, 502)
+    }
     if (!anthropicRes.ok) {
       console.error('Claude API error', anthropicRes.status, claudeData)
       const safeMsg =
@@ -265,9 +275,13 @@ async function callAnthropicWithRetry(args: {
       clearTimeout(timer)
       if (res.status === 429 || res.status >= 500) {
         if (attempt < MAX_ATTEMPTS) {
-          await new Promise((r) =>
-            setTimeout(r, 1000 * 2 ** (attempt - 1)),
-          )
+          const baseDelay = 1000 * 2 ** (attempt - 1)
+          const retryAfterHeader = res.headers.get('retry-after')
+          const retryAfterMs = retryAfterHeader
+            ? parseInt(retryAfterHeader, 10) * 1000
+            : 0
+          const delay = Math.max(baseDelay, retryAfterMs || 0)
+          await new Promise((r) => setTimeout(r, delay))
           continue
         }
       }

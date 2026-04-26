@@ -123,19 +123,22 @@ export function PatientForm({
 
   const isPending = create.isPending || update.isPending
 
-  // Re-sync form when switching to a different patient (edit target changes).
+  // Re-sync form only when the *patient identity* changes. Including the full
+  // `patient` object would re-fire on every parent render and overwrite edits.
   useEffect(() => {
-    const split = splitConditions(patient?.conditions)
+    if (!patient) return
+    const split = splitConditions(patient.conditions)
     reset({
-      initials: patient?.initials ?? '',
-      age: patient?.age ? String(patient.age) : '',
-      gender: (patient?.gender ?? '') as '' | 'male' | 'female',
+      initials: patient.initials ?? '',
+      age: patient.age ? String(patient.age) : '',
+      gender: (patient.gender ?? '') as '' | 'male' | 'female',
       conditions: split.known,
       additional_conditions: split.extra,
-      medications: patient?.medications?.join(', ') ?? '',
-      notes: patient?.notes ?? '',
+      medications: patient.medications?.join(', ') ?? '',
+      notes: patient.notes ?? '',
     })
-  }, [patient?.id, reset, patient])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patient?.id, reset])
 
   const watchedInitials = useWatch({ control, name: 'initials' }) ?? ''
   const watchedAge = useWatch({ control, name: 'age' }) ?? ''

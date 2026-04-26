@@ -30,8 +30,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     const { data: subscription } = supabase.auth.onAuthStateChange(
-      (_event, newSession) => {
+      (event, newSession) => {
         setSession(newSession)
+        // On any sign-out (explicit or session expiry), clear local user data.
+        if (event === 'SIGNED_OUT' || newSession === null) {
+          try {
+            localStorage.removeItem('visit-draft')
+          } catch {
+            // ignore
+          }
+        }
       },
     )
 

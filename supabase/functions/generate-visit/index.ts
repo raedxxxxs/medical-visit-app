@@ -147,6 +147,13 @@ Deno.serve(async (req) => {
     if (!Array.isArray(guideline_ids) || guideline_ids.length === 0) {
       return json({ error: 'יש לבחור לפחות הנחיה אחת' }, 400)
     }
+    // Reject pathologically large patient_data (DoS guard)
+    if (patient_data && JSON.stringify(patient_data).length > 50_000) {
+      return json({ error: 'נתוני מטופל גדולים מדי' }, 400)
+    }
+    if (body.patient_summary && body.patient_summary.length > 5_000) {
+      return json({ error: 'תקציר מטופל ארוך מדי' }, 400)
+    }
 
     const { data: guidelines, error: gErr } = await supabase
       .from('guidelines')
@@ -215,7 +222,13 @@ Deno.serve(async (req) => {
       content: [...blocks, { type: 'text', text: userText }],
     })
 
-    const claudeData = await anthropicRes.json()
+    let claudeData: any
+    try {
+      claudeData = await anthropicRes.json()
+    } catch (parseErr) {
+      console.error('Failed to parse Anthropic response as JSON', parseErr)
+      return json({ error: 'תגובה לא תקינה מ-Claude' }, 502)
+    }
     if (!anthropicRes.ok) {
       console.error('Claude API error', anthropicRes.status, claudeData)
       const safeMsg =
@@ -295,7 +308,12 @@ async function callAnthropicWithRetry(args: {
       clearTimeout(timer)
       if (res.status === 429 || res.status >= 500) {
         if (attempt < MAX_ATTEMPTS) {
-          const delay = 1000 * 2 ** (attempt - 1)
+          const baseDelay = 1000 * 2 ** (attempt - 1)
+          const retryAfterHeader = res.headers.get('retry-after')
+          const retryAfterMs = retryAfterHeader
+            ? parseInt(retryAfterHeader, 10) * 1000
+            : 0
+          const delay = Math.max(baseDelay, retryAfterMs || 0)
           await new Promise((r) => setTimeout(r, delay))
           continue
         }
@@ -383,7 +401,11 @@ function buildPatientPrompt(args: {
   parts.push(`# נתוני הביקור`)
   parts.push(`- סוג ביקור: ${visit_type}`)
   parts.push(`- תאריך: ${visit_date}`)
-  if (patient_summary) parts.push(`- מטופל: ${patient_summary}`)
+  // Wrap untrusted patient text in XML tags so Claude treats it as data,
+  // not as instructions (mitigates prompt injection from notes/free text).
+  if (patient_summary) {
+    parts.push(`- מטופל: <patient_summary>${patient_summary}</patient_summary>`)
+  }
 
   const labs = (patient_data.labs ?? {}) as Record<string, string>
   const vitals = (patient_data.vitals ?? {}) as Record<string, string>
@@ -410,7 +432,7 @@ function buildPatientPrompt(args: {
   }
   if (anamnesis.free_text) {
     parts.push(`\n## טקסט חופשי מהאנמנזה`)
-    parts.push(anamnesis.free_text)
+    parts.push(`<free_text>${anamnesis.free_text}</free_text>`)
   }
 
   parts.push(

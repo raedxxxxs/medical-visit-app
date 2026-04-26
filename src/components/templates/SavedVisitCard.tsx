@@ -100,11 +100,14 @@ export function SavedVisitCard({ visit, onView, patient: patientProp }: Props) {
           onClick={() => toggleFav.mutate(visit)}
           disabled={toggleFav.isPending}
           title={visit.is_favorite ? 'הסר מועדף' : 'סמן מועדף'}
+          aria-label={visit.is_favorite ? 'הסר מועדף' : 'סמן מועדף'}
+          aria-pressed={visit.is_favorite}
         >
           <Star
             className={cn(
               'h-4 w-4',
-              visit.is_favorite && 'fill-warning text-warning',
+              visit.is_favorite &&
+                'fill-amber-500 text-amber-500 dark:fill-amber-300 dark:text-amber-300',
             )}
           />
         </Button>
@@ -113,6 +116,7 @@ export function SavedVisitCard({ visit, onView, patient: patientProp }: Props) {
           size="sm"
           onClick={() => onView(visit)}
           title="צפה"
+          aria-label="צפה בביקור"
         >
           <Eye className="h-4 w-4" />
         </Button>
@@ -121,6 +125,7 @@ export function SavedVisitCard({ visit, onView, patient: patientProp }: Props) {
           size="sm"
           onClick={handleDuplicate}
           title="שכפל לביקור חדש"
+          aria-label="שכפל לביקור חדש"
         >
           <Copy className="h-4 w-4" />
         </Button>
@@ -130,6 +135,7 @@ export function SavedVisitCard({ visit, onView, patient: patientProp }: Props) {
           onClick={handleDelete}
           disabled={del.isPending}
           title="מחק"
+          aria-label="מחק ביקור"
         >
           {del.isPending ? (
             <Loader2 className="h-4 w-4 animate-spin" />

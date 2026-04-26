@@ -76,10 +76,10 @@ export function PatientImageUpload({
   const MAX_IMAGES = 10
 
   const processFiles = async (rawFiles: File[]) => {
-    if (extract.isPending) return // guard against re-entry
     setError(null)
     setApplied(null)
     setProgress(null)
+    if (extract.isPending) return // guard against re-entry
     const heicCount = rawFiles.filter(
       (f) => /heic|heif/i.test(f.type) || /\.hei[cf]$/i.test(f.name),
     ).length
