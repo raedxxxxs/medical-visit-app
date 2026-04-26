@@ -78,12 +78,15 @@ export function useUploadGuideline() {
 
 export function useDeleteGuideline() {
   const qc = useQueryClient()
+  const { user } = useAuth()
   return useMutation({
     mutationFn: async (g: Guideline) => {
+      if (!user) throw new Error('לא מחובר')
       const { error } = await supabase
         .from('guidelines')
         .delete()
         .eq('id', g.id)
+        .eq('user_id', user.id)
       if (error) throw error
       await deleteGuidelineFile(g.file_url).catch(() => {})
     },
@@ -93,12 +96,15 @@ export function useDeleteGuideline() {
 
 export function useToggleGuidelineActive() {
   const qc = useQueryClient()
+  const { user } = useAuth()
   return useMutation({
     mutationFn: async (g: Guideline) => {
+      if (!user) throw new Error('לא מחובר')
       const { error } = await supabase
         .from('guidelines')
         .update({ is_active: !g.is_active, updated_at: new Date().toISOString() })
         .eq('id', g.id)
+        .eq('user_id', user.id)
       if (error) throw error
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
@@ -111,6 +117,7 @@ export function useToggleGuidelineActive() {
  */
 export function useExtractGuidelineText() {
   const qc = useQueryClient()
+  const { user } = useAuth()
   return useMutation({
     mutationFn: async ({
       guideline,
@@ -119,6 +126,7 @@ export function useExtractGuidelineText() {
       guideline: Guideline
       onProgress?: (p: ExtractProgress) => void
     }) => {
+      if (!user) throw new Error('לא מחובר')
       const { data: file, error: dErr } = await supabase.storage
         .from('guidelines')
         .download(guideline.file_url)
@@ -134,6 +142,7 @@ export function useExtractGuidelineText() {
           updated_at: new Date().toISOString(),
         })
         .eq('id', guideline.id)
+        .eq('user_id', user.id)
       if (error) throw error
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),

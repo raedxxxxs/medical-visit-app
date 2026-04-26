@@ -3,10 +3,13 @@
 // קלט: מערך תמונות (base64) של תיק מטופל
 // פלט: סיכום מובנה בעברית (Markdown) של תיק המטופל
 
+import { createClient } from 'jsr:@supabase/supabase-js@2'
+
 const ANTHROPIC_MODEL = 'claude-sonnet-4-6'
 const MAX_OUTPUT_TOKENS = 4096
 const MAX_IMAGES = 20
-const MAX_BASE64_PER_IMAGE = 14_000_000 // ~10MB raw
+// Anthropic vision API caps base64 around 5MB per image. Reject earlier.
+const MAX_BASE64_PER_IMAGE = 5_400_000 // ~4MB raw
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -74,8 +77,22 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) return json({ error: 'Unauthorized' }, 401)
+    const authHeader = req.headers.get('Authorization') ?? ''
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim()
+    if (!token) return json({ error: 'Unauthorized' }, 401)
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return json({ error: 'Server misconfigured' }, 500)
+    }
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    })
+    const { data: userData, error: userErr } = await supabase.auth.getUser(token)
+    if (userErr || !userData?.user) {
+      return json({ error: 'Unauthorized' }, 401)
+    }
 
     const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
     if (!anthropicKey) {
@@ -128,9 +145,12 @@ Deno.serve(async (req) => {
     }
     if (!anthropicRes.ok) {
       console.error('Claude API error', anthropicRes.status, claudeData)
+      const status = anthropicRes.status === 429 ? 429 : 502
       const safeMsg =
-        (claudeData?.error?.message as string | undefined) ?? 'Claude API error'
-      return json({ error: safeMsg }, anthropicRes.status)
+        anthropicRes.status === 429
+          ? 'יותר מדי בקשות, נסה שוב בעוד רגע'
+          : 'שגיאה בשירות הסיכום'
+      return json({ error: safeMsg }, status)
     }
 
     const responseBlocks = (claudeData.content ?? []) as Array<{
@@ -169,8 +189,8 @@ async function callAnthropicWithRetry(args: {
   system: string
   content: unknown[]
 }): Promise<Response> {
-  const TIMEOUT_MS = 90_000
-  const MAX_ATTEMPTS = 3
+  const TIMEOUT_MS = 25_000
+  const MAX_ATTEMPTS = 2
   let lastErr: unknown
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const controller = new AbortController()

@@ -56,6 +56,10 @@ export function LabImageUpload({ draft, update }: Props) {
     total: number
   } | null>(null)
 
+  // Mirror the latest draft so the global paste handler sees fresh state.
+  const draftRef = useRef(draft)
+  draftRef.current = draft
+
   const handlePick = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
     e.target.value = ''
@@ -155,8 +159,9 @@ export function LabImageUpload({ draft, update }: Props) {
     values: Record<string, string>,
     processedCount: number,
   ) => {
-    const newLabs = { ...draft.labs }
-    const newVitals = { ...draft.vitals }
+    const current = draftRef.current
+    const newLabs = { ...current.labs }
+    const newVitals = { ...current.vitals }
     const applied: string[] = []
 
     for (const [k, v] of Object.entries(values)) {

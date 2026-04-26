@@ -3,6 +3,8 @@
 // קלט: תמונה ב-base64 + mode ('labs' | 'medications')
 // פלט: JSON עם הערכים שזוהו (ללא שמירה ל-DB / Storage)
 
+import { createClient } from 'jsr:@supabase/supabase-js@2'
+
 const ANTHROPIC_MODEL = 'claude-sonnet-4-6'
 const MAX_OUTPUT_TOKENS = 1024
 
@@ -122,8 +124,21 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) return json({ error: 'Unauthorized' }, 401)
+    const authHeader = req.headers.get('Authorization') ?? ''
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim()
+    if (!token) return json({ error: 'Unauthorized' }, 401)
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return json({ error: 'Server misconfigured' }, 500)
+    }
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    })
+    const { data: userData, error: userErr } = await supabase.auth.getUser(token)
+    if (userErr || !userData?.user) {
+      return json({ error: 'Unauthorized' }, 401)
+    }
 
     const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
     if (!anthropicKey) {
@@ -185,9 +200,12 @@ Deno.serve(async (req) => {
     }
     if (!anthropicRes.ok) {
       console.error('Claude API error', anthropicRes.status, claudeData)
+      const status = anthropicRes.status === 429 ? 429 : 502
       const safeMsg =
-        (claudeData?.error?.message as string | undefined) ?? 'Claude API error'
-      return json({ error: safeMsg }, anthropicRes.status)
+        anthropicRes.status === 429
+          ? 'יותר מדי בקשות, נסה שוב בעוד רגע'
+          : 'שגיאה בשירות החילוץ'
+      return json({ error: safeMsg }, status)
     }
 
     const responseBlocks = (claudeData.content ?? []) as Array<{

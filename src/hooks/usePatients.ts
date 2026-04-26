@@ -26,7 +26,10 @@ export type PatientInput = Omit<
   patient_code?: string
 }
 
-async function nextPatientCode(userId: string): Promise<string> {
+async function nextPatientCode(
+  userId: string,
+  bump = 0,
+): Promise<string> {
   const { data, error } = await supabase
     .from('patients')
     .select('patient_code')
@@ -37,7 +40,7 @@ async function nextPatientCode(userId: string): Promise<string> {
     const m = /^P-(\d+)$/.exec(row.patient_code as string)
     if (m) max = Math.max(max, parseInt(m[1], 10))
   }
-  return `P-${String(max + 1).padStart(3, '0')}`
+  return `P-${String(max + 1 + bump).padStart(3, '0')}`
 }
 
 export function useCreatePatient() {
@@ -46,18 +49,31 @@ export function useCreatePatient() {
   return useMutation({
     mutationFn: async (input: PatientInput) => {
       if (!user) throw new Error('לא מחובר')
-      const code = input.patient_code ?? (await nextPatientCode(user.id))
-      const { error } = await supabase.from('patients').insert({
-        user_id: user.id,
-        patient_code: code,
-        initials: input.initials,
-        age: input.age,
-        gender: input.gender,
-        conditions: input.conditions,
-        medications: input.medications,
-        notes: input.notes,
-      })
-      if (error) throw error
+      const explicitCode = input.patient_code
+      // Retry on unique-violation in case two concurrent creates pick the same code.
+      const MAX_TRIES = 5
+      for (let attempt = 0; attempt < MAX_TRIES; attempt++) {
+        const code =
+          explicitCode ?? (await nextPatientCode(user.id, attempt))
+        const { error } = await supabase.from('patients').insert({
+          user_id: user.id,
+          patient_code: code,
+          initials: input.initials,
+          age: input.age,
+          gender: input.gender,
+          conditions: input.conditions,
+          medications: input.medications,
+          notes: input.notes,
+        })
+        if (!error) return
+        // 23505 = unique_violation in Postgres
+        const isUniqueViolation =
+          (error as { code?: string }).code === '23505' ||
+          /duplicate key|unique/i.test(error.message ?? '')
+        if (explicitCode || !isUniqueViolation || attempt === MAX_TRIES - 1) {
+          throw error
+        }
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
   })
@@ -65,8 +81,10 @@ export function useCreatePatient() {
 
 export function useUpdatePatient() {
   const qc = useQueryClient()
+  const { user } = useAuth()
   return useMutation({
     mutationFn: async ({ id, ...input }: PatientInput & { id: string }) => {
+      if (!user) throw new Error('לא מחובר')
       const { error } = await supabase
         .from('patients')
         .update({
@@ -78,6 +96,7 @@ export function useUpdatePatient() {
           notes: input.notes,
         })
         .eq('id', id)
+        .eq('user_id', user.id)
       if (error) throw error
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
@@ -86,9 +105,15 @@ export function useUpdatePatient() {
 
 export function useDeletePatient() {
   const qc = useQueryClient()
+  const { user } = useAuth()
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('patients').delete().eq('id', id)
+      if (!user) throw new Error('לא מחובר')
+      const { error } = await supabase
+        .from('patients')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id)
       if (error) throw error
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),

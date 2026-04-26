@@ -242,9 +242,12 @@ Deno.serve(async (req) => {
     }
     if (!anthropicRes.ok) {
       console.error('Claude API error', anthropicRes.status, claudeData)
+      const status = anthropicRes.status === 429 ? 429 : 502
       const safeMsg =
-        (claudeData?.error?.message as string | undefined) ?? 'Claude API error'
-      return json({ error: safeMsg }, anthropicRes.status)
+        anthropicRes.status === 429
+          ? 'יותר מדי בקשות, נסה שוב בעוד רגע'
+          : 'שגיאה בשירות יצירת הביקור'
+      return json({ error: safeMsg }, status)
     }
 
     const responseBlocks = (claudeData.content ?? []) as Array<{

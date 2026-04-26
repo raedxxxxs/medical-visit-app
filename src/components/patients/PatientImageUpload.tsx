@@ -60,6 +60,22 @@ export function PatientImageUpload({
     total: number
   } | null>(null)
 
+  // Mirror latest props so the global paste handler reads fresh values.
+  const liveRef = useRef({
+    initials: currentInitials,
+    age: currentAge,
+    gender: currentGender,
+    medications: currentMedications,
+    conditions: currentConditions,
+  })
+  liveRef.current = {
+    initials: currentInitials,
+    age: currentAge,
+    gender: currentGender,
+    medications: currentMedications,
+    conditions: currentConditions,
+  }
+
   const handlePick = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
     e.target.value = ''
@@ -164,15 +180,16 @@ export function PatientImageUpload({
   }
 
   const applyMerged = (r: PatientExtractResult, imagesProcessed: number) => {
+    const live = liveRef.current
     const newConditions = (r.conditions ?? []).filter((c) =>
       VALID_CONDITIONS.has(c),
     )
     const mergedConditions = Array.from(
-      new Set([...currentConditions, ...newConditions]),
+      new Set([...live.conditions, ...newConditions]),
     )
 
     const newMeds = r.medications ?? []
-    const existingMeds = currentMedications
+    const existingMeds = live.medications
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean)
@@ -189,12 +206,12 @@ export function PatientImageUpload({
     }
 
     // Only fill fields that are currently empty
-    if (!currentInitials.trim() && r.initials && r.initials.trim()) {
+    if (!live.initials.trim() && r.initials && r.initials.trim()) {
       result.initials = r.initials.trim()
       status.initials = true
     }
     if (
-      !currentAge.trim() &&
+      !live.age.trim() &&
       typeof r.age === 'number' &&
       r.age > 0 &&
       r.age < 120
@@ -202,7 +219,7 @@ export function PatientImageUpload({
       result.age = String(r.age)
       status.age = true
     }
-    if (!currentGender && (r.gender === 'male' || r.gender === 'female')) {
+    if (!live.gender && (r.gender === 'male' || r.gender === 'female')) {
       result.gender = r.gender
       status.gender = true
     }

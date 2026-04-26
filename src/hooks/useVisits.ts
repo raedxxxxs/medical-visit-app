@@ -53,9 +53,15 @@ export function useSaveVisit() {
 
 export function useDeleteVisit() {
   const qc = useQueryClient()
+  const { user } = useAuth()
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('visits').delete().eq('id', id)
+      if (!user) throw new Error('לא מחובר')
+      const { error } = await supabase
+        .from('visits')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id)
       if (error) throw error
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
@@ -64,12 +70,15 @@ export function useDeleteVisit() {
 
 export function useToggleVisitFavorite() {
   const qc = useQueryClient()
+  const { user } = useAuth()
   return useMutation({
     mutationFn: async (visit: Visit) => {
+      if (!user) throw new Error('לא מחובר')
       const { error } = await supabase
         .from('visits')
         .update({ is_favorite: !visit.is_favorite })
         .eq('id', visit.id)
+        .eq('user_id', user.id)
       if (error) throw error
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
