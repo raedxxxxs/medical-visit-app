@@ -68,17 +68,36 @@ export function PatientImageUpload({
   const handleDrop = async (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     setIsDragging(false)
-    const files = Array.from(e.dataTransfer.files ?? []).filter((f) =>
-      f.type.startsWith('image/'),
-    )
+    const files = Array.from(e.dataTransfer.files ?? [])
     await processFiles(files)
   }
 
-  const processFiles = async (files: File[]) => {
+  const MAX_IMAGE_MB = 10
+  const MAX_IMAGES = 10
+
+  const processFiles = async (rawFiles: File[]) => {
+    if (extract.isPending) return // guard against re-entry
     setError(null)
     setApplied(null)
     setProgress(null)
+    const heicCount = rawFiles.filter(
+      (f) => /heic|heif/i.test(f.type) || /\.hei[cf]$/i.test(f.name),
+    ).length
+    const files = rawFiles.filter((f) => f.type.startsWith('image/'))
+    if (heicCount > 0 && files.length === 0) {
+      setError('קבצי HEIC לא נתמכים. המר ל-JPG/PNG ונסה שוב.')
+      return
+    }
     if (files.length === 0) return
+    if (files.length > MAX_IMAGES) {
+      setError(`מקסימום ${MAX_IMAGES} תמונות בפעם אחת`)
+      return
+    }
+    const tooBig = files.find((f) => f.size > MAX_IMAGE_MB * 1024 * 1024)
+    if (tooBig) {
+      setError(`התמונה "${tooBig.name}" חורגת מ-${MAX_IMAGE_MB}MB`)
+      return
+    }
 
     const merged: PatientExtractResult = {
       initials: null,

@@ -79,6 +79,28 @@ export function symptomLabel(value: string): string {
   return SYMPTOM_OPTIONS.find((s) => s.value === value)?.label ?? value
 }
 
+/** Per-field plausible bounds for validation. min:0 means non-negative. */
+export const LAB_BOUNDS: Record<string, { min: number; max: number }> = {
+  hba1c: { min: 3, max: 20 },
+  glucose: { min: 20, max: 800 },
+  ldl: { min: 0, max: 500 },
+  hdl: { min: 0, max: 200 },
+  total_cholesterol: { min: 50, max: 800 },
+  triglycerides: { min: 0, max: 2000 },
+  creatinine: { min: 0.1, max: 20 },
+  egfr: { min: 0, max: 200 },
+  microalbumin: { min: 0, max: 5000 },
+  tsh: { min: 0, max: 100 },
+  b12: { min: 50, max: 3000 },
+  vitamin_d: { min: 0, max: 200 },
+  systolic_bp: { min: 60, max: 260 },
+  diastolic_bp: { min: 30, max: 180 },
+  pulse: { min: 30, max: 220 },
+  weight: { min: 20, max: 300 },
+  height: { min: 80, max: 230 },
+  bmi: { min: 10, max: 80 },
+}
+
 export const LAB_VALUE_LABELS: Record<string, string> = {
   hba1c: 'HbA1c',
   glucose: 'גלוקוז',

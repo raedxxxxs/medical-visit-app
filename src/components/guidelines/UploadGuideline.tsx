@@ -12,7 +12,7 @@ import type { GuidelineCategory } from '@/types/database'
 import { cn } from '@/lib/utils'
 
 const schema = z.object({
-  title: z.string().min(1, 'יש להזין כותרת'),
+  title: z.string().min(1, 'יש להזין כותרת').max(200, 'כותרת ארוכה מדי'),
   category: z.enum([
     'diabetes',
     'hypertension',
@@ -20,7 +20,7 @@ const schema = z.object({
     'screening',
     'general',
   ]),
-  notes: z.string().optional(),
+  notes: z.string().max(1000, 'הערות ארוכות מדי').optional(),
 })
 
 type FormData = z.infer<typeof schema>

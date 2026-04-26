@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -11,8 +11,11 @@ interface Props {
 }
 
 export function Dialog({ open, onClose, title, children, className }: Props) {
+  const previousFocus = useRef<HTMLElement | null>(null)
+
   useEffect(() => {
     if (!open) return
+    previousFocus.current = document.activeElement as HTMLElement | null
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
@@ -21,6 +24,8 @@ export function Dialog({ open, onClose, title, children, className }: Props) {
     return () => {
       document.removeEventListener('keydown', onKey)
       document.body.style.overflow = ''
+      // Restore focus to the previously-focused element
+      previousFocus.current?.focus?.()
     }
   }, [open, onClose])
 

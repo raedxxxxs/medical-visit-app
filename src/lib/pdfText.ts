@@ -21,25 +21,28 @@ export async function extractTextFromPdf(
     useSystemFonts: false,
   }).promise
 
-  const pages: string[] = []
-  const total = pdf.numPages
+  try {
+    const pages: string[] = []
+    const total = pdf.numPages
 
-  for (let i = 1; i <= total; i++) {
-    const page = await pdf.getPage(i)
-    const content = await page.getTextContent()
-    const text = content.items
-      .map((item) => {
-        if (typeof item === 'object' && item && 'str' in item) {
-          return (item as { str: string }).str
-        }
-        return ''
-      })
-      .filter(Boolean)
-      .join(' ')
-    pages.push(`--- עמוד ${i} ---\n${text}`)
-    onProgress?.({ currentPage: i, totalPages: total })
+    for (let i = 1; i <= total; i++) {
+      const page = await pdf.getPage(i)
+      const content = await page.getTextContent()
+      const text = content.items
+        .map((item) => {
+          if (typeof item === 'object' && item && 'str' in item) {
+            return (item as { str: string }).str
+          }
+          return ''
+        })
+        .filter(Boolean)
+        .join(' ')
+      pages.push(`--- עמוד ${i} ---\n${text}`)
+      onProgress?.({ currentPage: i, totalPages: total })
+    }
+
+    return pages.join('\n\n')
+  } finally {
+    await pdf.destroy().catch(() => {})
   }
-
-  await pdf.destroy()
-  return pages.join('\n\n')
 }

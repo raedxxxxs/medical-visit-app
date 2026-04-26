@@ -1,6 +1,6 @@
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { SYMPTOM_OPTIONS } from '@/lib/visits'
+import { LAB_BOUNDS, SYMPTOM_OPTIONS } from '@/lib/visits'
 import type { LabValues, Vitals, VisitDraft } from '@/lib/visits'
 import { LabImageUpload } from './LabImageUpload'
 
@@ -33,6 +33,15 @@ const VITAL_FIELDS: { key: keyof Vitals; label: string; unit?: string }[] = [
   { key: 'bmi', label: 'BMI', unit: 'kg/m²' },
 ]
 
+function isOutOfBounds(key: string, value: string): boolean {
+  if (!value.trim()) return false
+  const n = Number(value)
+  if (Number.isNaN(n)) return true
+  const b = LAB_BOUNDS[key]
+  if (!b) return false
+  return n < b.min || n > b.max
+}
+
 export function Step2Data({ draft, update }: Props) {
   const setLab = (key: keyof LabValues, value: string) => {
     update({ labs: { ...draft.labs, [key]: value } })
@@ -48,6 +57,40 @@ export function Step2Data({ draft, update }: Props) {
     update({ anamnesis: { ...draft.anamnesis, symptoms: next } })
   }
 
+  const renderField = (
+    f: { key: string; label: string; unit?: string },
+    value: string,
+    onChange: (v: string) => void,
+  ) => {
+    const bounds = LAB_BOUNDS[f.key]
+    const outOfBounds = isOutOfBounds(f.key, value)
+    return (
+      <div key={f.key} className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-text">
+          {f.label}
+          {f.unit && <span className="text-text-muted"> ({f.unit})</span>}
+        </label>
+        <Input
+          type="number"
+          step="any"
+          dir="ltr"
+          min={bounds?.min}
+          max={bounds?.max}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={
+            outOfBounds ? 'border-warning focus-visible:ring-warning' : ''
+          }
+        />
+        {outOfBounds && bounds && (
+          <span className="text-xs text-warning">
+            ערך חריג (טווח סביר: {bounds.min}–{bounds.max})
+          </span>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <LabImageUpload draft={draft} update={update} />
@@ -55,46 +98,18 @@ export function Step2Data({ draft, update }: Props) {
       <section className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-6">
         <h3 className="text-lg font-semibold text-text">מדידות</h3>
         <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-          {VITAL_FIELDS.map((f) => (
-            <div key={f.key} className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-text">
-                {f.label}
-                {f.unit && (
-                  <span className="text-text-muted"> ({f.unit})</span>
-                )}
-              </label>
-              <Input
-                type="number"
-                step="any"
-                dir="ltr"
-                value={draft.vitals[f.key] ?? ''}
-                onChange={(e) => setVital(f.key, e.target.value)}
-              />
-            </div>
-          ))}
+          {VITAL_FIELDS.map((f) =>
+            renderField(f, draft.vitals[f.key] ?? '', (v) => setVital(f.key, v)),
+          )}
         </div>
       </section>
 
       <section className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-6">
         <h3 className="text-lg font-semibold text-text">ערכי מעבדה</h3>
         <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-          {LAB_FIELDS.map((f) => (
-            <div key={f.key} className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-text">
-                {f.label}
-                {f.unit && (
-                  <span className="text-text-muted"> ({f.unit})</span>
-                )}
-              </label>
-              <Input
-                type="number"
-                step="any"
-                dir="ltr"
-                value={draft.labs[f.key] ?? ''}
-                onChange={(e) => setLab(f.key, e.target.value)}
-              />
-            </div>
-          ))}
+          {LAB_FIELDS.map((f) =>
+            renderField(f, draft.labs[f.key] ?? '', (v) => setLab(f.key, v)),
+          )}
         </div>
       </section>
 

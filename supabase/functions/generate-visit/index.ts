@@ -151,6 +151,7 @@ Deno.serve(async (req) => {
     const { data: guidelines, error: gErr } = await supabase
       .from('guidelines')
       .select('id, title, file_name, extracted_text')
+      .eq('user_id', user.id)
       .in('id', guideline_ids)
 
     if (gErr) return json({ error: gErr.message }, 500)
@@ -171,6 +172,8 @@ Deno.serve(async (req) => {
     }
 
     const blocks: TextBlock[] = []
+    let totalChars = 0
+    const TOTAL_BUDGET = 800_000 // ~200K tokens, well under 1M Anthropic limit
     for (const g of guidelines) {
       if (!g.extracted_text) continue
       let text = g.extracted_text as string
@@ -179,6 +182,17 @@ Deno.serve(async (req) => {
           text.slice(0, MAX_TEXT_PER_GUIDELINE) +
           '\n\n[... קוצר בגלל אורך — חלק מהטקסט הושמט]'
       }
+      const remaining = TOTAL_BUDGET - totalChars
+      if (remaining <= 0) {
+        // Skip remaining guidelines to avoid exceeding token budget
+        break
+      }
+      if (text.length > remaining) {
+        text =
+          text.slice(0, remaining) +
+          '\n\n[... קוצר עקב חריגה מתקציב הקלט הכולל]'
+      }
+      totalChars += text.length
       blocks.push({
         type: 'text',
         text: `# הנחיה: ${g.title}\n(שם קובץ: ${g.file_name})\n\n${text}`,
@@ -193,35 +207,20 @@ Deno.serve(async (req) => {
       patient_summary: body.patient_summary,
     })
 
-    const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': anthropicKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: ANTHROPIC_MODEL,
-        max_tokens: MAX_OUTPUT_TOKENS,
-        system: SYSTEM_PROMPT,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              ...blocks,
-              { type: 'text', text: userText },
-            ],
-          },
-        ],
-      }),
+    const anthropicRes = await callAnthropicWithRetry({
+      apiKey: anthropicKey,
+      model: ANTHROPIC_MODEL,
+      maxTokens: MAX_OUTPUT_TOKENS,
+      system: SYSTEM_PROMPT,
+      content: [...blocks, { type: 'text', text: userText }],
     })
 
     const claudeData = await anthropicRes.json()
     if (!anthropicRes.ok) {
-      return json(
-        { error: 'Claude API error', details: claudeData },
-        anthropicRes.status,
-      )
+      console.error('Claude API error', anthropicRes.status, claudeData)
+      const safeMsg =
+        (claudeData?.error?.message as string | undefined) ?? 'Claude API error'
+      return json({ error: safeMsg }, anthropicRes.status)
     }
 
     const responseBlocks = (claudeData.content ?? []) as Array<{
@@ -263,6 +262,57 @@ function json(body: unknown, status = 200): Response {
   })
 }
 
+/** Call Anthropic API with timeout + retry on 429/5xx (exponential backoff). */
+async function callAnthropicWithRetry(args: {
+  apiKey: string
+  model: string
+  maxTokens: number
+  system: string
+  content: unknown[]
+}): Promise<Response> {
+  const TIMEOUT_MS = 90_000
+  const MAX_ATTEMPTS = 3
+  let lastErr: unknown
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'x-api-key': args.apiKey,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: args.model,
+          max_tokens: args.maxTokens,
+          system: args.system,
+          messages: [{ role: 'user', content: args.content }],
+        }),
+      })
+      clearTimeout(timer)
+      if (res.status === 429 || res.status >= 500) {
+        if (attempt < MAX_ATTEMPTS) {
+          const delay = 1000 * 2 ** (attempt - 1)
+          await new Promise((r) => setTimeout(r, delay))
+          continue
+        }
+      }
+      return res
+    } catch (e) {
+      clearTimeout(timer)
+      lastErr = e
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, 1000 * 2 ** (attempt - 1)))
+        continue
+      }
+    }
+  }
+  throw lastErr ?? new Error('Anthropic call failed')
+}
+
 /**
  * Post-processor that enforces the structural rules regardless of model output:
  * 1. Removes "## בדיקה גופנית" section entirely (header + body until next ##).
@@ -273,11 +323,11 @@ function sanitizeTemplate(input: string): string {
   let text = input
 
   // 1. Remove "בדיקה גופנית" section (and any English variants), from its header
-  // until the next "## " heading or end-of-text.
+  // until the next "## " heading or end-of-text. JS regex doesn't support \Z; use lookahead with $.
   const physExamPatterns = [
-    /^[ \t]*##[ \t]*בדיקה[ \t]*גופנית[\s\S]*?(?=^[ \t]*##[ \t]|\Z)/gm,
-    /^[ \t]*##[ \t]*Physical[ \t]*Examination[\s\S]*?(?=^[ \t]*##[ \t]|\Z)/gim,
-    /^[ \t]*##[ \t]*בדיקה[ \t]*קלינית[\s\S]*?(?=^[ \t]*##[ \t]|\Z)/gm,
+    /^[ \t]*##[ \t]*בדיקה[ \t]*גופנית[\s\S]*?(?=^[ \t]*##[ \t]|$(?![\s\S]))/gm,
+    /^[ \t]*##[ \t]*Physical[ \t]*Examination[\s\S]*?(?=^[ \t]*##[ \t]|$(?![\s\S]))/gim,
+    /^[ \t]*##[ \t]*בדיקה[ \t]*קלינית[\s\S]*?(?=^[ \t]*##[ \t]|$(?![\s\S]))/gm,
   ]
   for (const re of physExamPatterns) text = text.replace(re, '')
 

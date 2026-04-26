@@ -56,6 +56,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
+    // Clear any local user-scoped state so it doesn't leak to next user.
+    try {
+      localStorage.removeItem('visit-draft')
+    } catch {
+      // ignore
+    }
   }
 
   return (

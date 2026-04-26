@@ -154,42 +154,30 @@ Deno.serve(async (req) => {
           ? 'חלץ את פרטי המטופל והחזר JSON.'
           : 'זהה תרופות והחזר JSON.'
 
-    const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': anthropicKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: ANTHROPIC_MODEL,
-        max_tokens: MAX_OUTPUT_TOKENS,
-        system: systemPrompt,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: {
-                  type: 'base64',
-                  media_type: media_type ?? 'image/jpeg',
-                  data: image_base64,
-                },
-              },
-              { type: 'text', text: instruction },
-            ],
+    const anthropicRes = await callAnthropicWithRetry({
+      apiKey: anthropicKey,
+      model: ANTHROPIC_MODEL,
+      maxTokens: MAX_OUTPUT_TOKENS,
+      system: systemPrompt,
+      content: [
+        {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: media_type ?? 'image/jpeg',
+            data: image_base64,
           },
-        ],
-      }),
+        },
+        { type: 'text', text: instruction },
+      ],
     })
 
     const claudeData = await anthropicRes.json()
     if (!anthropicRes.ok) {
-      return json(
-        { error: 'Claude API error', details: claudeData },
-        anthropicRes.status,
-      )
+      console.error('Claude API error', anthropicRes.status, claudeData)
+      const safeMsg =
+        (claudeData?.error?.message as string | undefined) ?? 'Claude API error'
+      return json({ error: safeMsg }, anthropicRes.status)
     }
 
     const responseBlocks = (claudeData.content ?? []) as Array<{
@@ -222,14 +210,76 @@ function json(body: unknown, status = 200): Response {
 }
 
 function parseJsonFromResponse(text: string): unknown {
-  let cleaned = text.trim()
-  cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '')
-  const start = cleaned.indexOf('{')
-  const end = cleaned.lastIndexOf('}')
-  if (start >= 0 && end > start) cleaned = cleaned.slice(start, end + 1)
+  const stripped = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```\s*$/i, '')
+    .trim()
+  // Try direct parse first (handles arrays, objects, nested data)
   try {
-    return JSON.parse(cleaned)
+    return JSON.parse(stripped)
   } catch {
+    // Fallback: substring between first { and last }
+    const start = stripped.indexOf('{')
+    const end = stripped.lastIndexOf('}')
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(stripped.slice(start, end + 1))
+      } catch {
+        // ignore
+      }
+    }
     return { parse_error: true, raw_text: text }
   }
+}
+
+async function callAnthropicWithRetry(args: {
+  apiKey: string
+  model: string
+  maxTokens: number
+  system: string
+  content: unknown[]
+}): Promise<Response> {
+  const TIMEOUT_MS = 60_000
+  const MAX_ATTEMPTS = 3
+  let lastErr: unknown
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'x-api-key': args.apiKey,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: args.model,
+          max_tokens: args.maxTokens,
+          system: args.system,
+          messages: [{ role: 'user', content: args.content }],
+        }),
+      })
+      clearTimeout(timer)
+      if (res.status === 429 || res.status >= 500) {
+        if (attempt < MAX_ATTEMPTS) {
+          await new Promise((r) =>
+            setTimeout(r, 1000 * 2 ** (attempt - 1)),
+          )
+          continue
+        }
+      }
+      return res
+    } catch (e) {
+      clearTimeout(timer)
+      lastErr = e
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, 1000 * 2 ** (attempt - 1)))
+        continue
+      }
+    }
+  }
+  throw lastErr ?? new Error('Anthropic call failed')
 }

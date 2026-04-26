@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -39,10 +40,12 @@ const schema = z.object({
     .refine(
       (v) => {
         if (!v || !v.trim()) return true
+        // Integer only, 0-120
+        if (!/^\d+$/.test(v.trim())) return false
         const n = parseInt(v, 10)
         return !isNaN(n) && n >= 0 && n <= 120
       },
-      { message: 'גיל לא תקין' },
+      { message: 'גיל חייב להיות מספר שלם בין 0 ל-120' },
     ),
   gender: z.enum(['', 'male', 'female']),
   conditions: z.array(z.string()),
@@ -71,6 +74,7 @@ export function PatientForm({
     handleSubmit,
     setValue,
     control,
+    reset,
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -118,6 +122,20 @@ export function PatientForm({
   })
 
   const isPending = create.isPending || update.isPending
+
+  // Re-sync form when switching to a different patient (edit target changes).
+  useEffect(() => {
+    const split = splitConditions(patient?.conditions)
+    reset({
+      initials: patient?.initials ?? '',
+      age: patient?.age ? String(patient.age) : '',
+      gender: (patient?.gender ?? '') as '' | 'male' | 'female',
+      conditions: split.known,
+      additional_conditions: split.extra,
+      medications: patient?.medications?.join(', ') ?? '',
+      notes: patient?.notes ?? '',
+    })
+  }, [patient?.id, reset, patient])
 
   const watchedInitials = useWatch({ control, name: 'initials' }) ?? ''
   const watchedAge = useWatch({ control, name: 'age' }) ?? ''

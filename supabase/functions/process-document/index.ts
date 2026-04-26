@@ -86,6 +86,7 @@ Deno.serve(async (req) => {
     const { data: doc, error: dErr } = await supabase
       .from('patient_documents')
       .select('id, file_url, file_name')
+      .eq('user_id', user.id)
       .eq('id', document_id)
       .single()
     if (dErr || !doc) return json({ error: 'מסמך לא נמצא' }, 404)
@@ -156,10 +157,10 @@ Deno.serve(async (req) => {
 
     const claudeData = await anthropicRes.json()
     if (!anthropicRes.ok) {
-      return json(
-        { error: 'Claude API error', details: claudeData },
-        anthropicRes.status,
-      )
+      console.error('Claude API error', anthropicRes.status, claudeData)
+      const safeMsg =
+        (claudeData?.error?.message as string | undefined) ?? 'Claude API error'
+      return json({ error: safeMsg }, anthropicRes.status)
     }
 
     const responseBlocks = (claudeData.content ?? []) as Array<{
@@ -198,16 +199,23 @@ function json(body: unknown, status = 200): Response {
 
 /** Strip markdown fences and try to parse JSON. */
 function parseJsonFromResponse(text: string): unknown {
-  let cleaned = text.trim()
-  cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '')
-  const start = cleaned.indexOf('{')
-  const end = cleaned.lastIndexOf('}')
-  if (start >= 0 && end > start) {
-    cleaned = cleaned.slice(start, end + 1)
-  }
+  const stripped = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```\s*$/i, '')
+    .trim()
   try {
-    return JSON.parse(cleaned)
+    return JSON.parse(stripped)
   } catch {
+    const start = stripped.indexOf('{')
+    const end = stripped.lastIndexOf('}')
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(stripped.slice(start, end + 1))
+      } catch {
+        // ignore
+      }
+    }
     return { raw_text: text, parse_error: true }
   }
 }
