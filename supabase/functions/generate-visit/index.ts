@@ -286,25 +286,31 @@ function sanitizeTemplate(input: string): string {
   let body = sourcesIdx >= 0 ? text.slice(0, sourcesIdx) : text
   const sources = sourcesIdx >= 0 ? text.slice(sourcesIdx) : ''
 
-  // 3. From the body only, remove inline citation lines.
+  // 3. From the body only, remove inline citation BLOCKQUOTE lines.
+  // Only match lines that START with `>` (markdown blockquote) and look like citations.
   body = body
     .split('\n')
     .filter((line) => {
       const t = line.trim()
-      // Markdown blockquote with citation marker
+      // Must be a blockquote AND contain explicit citation markers
+      if (!/^>/.test(t)) return true
       if (/^>\s*\*{0,2}ציטוט/.test(t)) return false
-      // Blockquote that mentions ADA / Standards of Care / Section X
-      if (/^>/.test(t) && /(ADA|NICE|Standards of Care|Section\s*\d+)/i.test(t))
+      // Strict guideline-citation pattern (must have all-caps doc name OR explicit "Standards of Care")
+      if (/(\bADA\b|\bNICE\b|\bAHA\b|Standards of Care|Section\s+\d+\b)/.test(t))
         return false
       return true
     })
     .join('\n')
 
-  // 4. Also remove inline reference markers like " — *ADA Standards of Care 2026, Section 8*"
+  // 4. Remove inline reference markers like " — *ADA Standards of Care 2026, Section 8*"
+  // Only match well-formed citation patterns wrapped in asterisks/em-dashes.
   body = body
-    .replace(/[—–-]\s*\*+[^*\n]*?(ADA|NICE|Standards of Care|Section\s*\d+)[^*\n]*?\*+/g, '')
-    .replace(/\(\s*(ADA|NICE)[^)]*\)/g, '')
-    .replace(/\s*—\s*Section\s*\d+/g, '')
+    .replace(
+      /[—–-]\s*\*+[^*\n]*?(\bADA\b|\bNICE\b|\bAHA\b|Standards of Care|Section\s+\d+\b)[^*\n]*?\*+/g,
+      '',
+    )
+    .replace(/\(\s*(\bADA\b|\bNICE\b|\bAHA\b)[^)]*\)/g, '')
+    .replace(/\s*—\s*Section\s+\d+\b/g, '')
 
   // 5. Collapse extra blank lines.
   let result = (body + '\n' + sources).replace(/\n{3,}/g, '\n\n').trim()

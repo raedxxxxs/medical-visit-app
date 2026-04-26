@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   BookOpen,
@@ -21,10 +21,12 @@ import { usePatients } from '@/hooks/usePatients'
 import { useVisits } from '@/hooks/useVisits'
 import { VISIT_TYPE_LABELS, type VisitType } from '@/lib/visits'
 import { CATEGORY_LABELS } from '@/lib/guidelines'
-import type { GuidelineCategory } from '@/types/database'
+import type { GuidelineCategory, Visit } from '@/types/database'
+import { VisitDetailDialog } from '@/components/templates/VisitDetailDialog'
 
 export function Dashboard() {
   const navigate = useNavigate()
+  const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null)
   const { data: guidelines, isLoading: gLoading } = useGuidelines()
   const { data: patients, isLoading: pLoading } = usePatients()
   const { data: visits, isLoading: vLoading } = useVisits()
@@ -159,7 +161,7 @@ export function Dashboard() {
                 return (
                   <button
                     key={v.id}
-                    onClick={() => navigate('/templates')}
+                    onClick={() => setSelectedVisit(v)}
                     className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted p-3 text-right hover:bg-muted/70"
                   >
                     <div className="min-w-0 flex-1">
@@ -241,6 +243,11 @@ export function Dashboard() {
           </CardContent>
         </Card>
       )}
+
+      <VisitDetailDialog
+        visit={selectedVisit}
+        onClose={() => setSelectedVisit(null)}
+      />
     </div>
   )
 }

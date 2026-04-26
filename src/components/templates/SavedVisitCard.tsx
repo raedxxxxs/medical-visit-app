@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FileText, Eye, Copy, Trash2, Star, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -9,22 +10,27 @@ import {
 import { useDraftVisit } from '@/hooks/useDraftVisit'
 import { VISIT_TYPE_LABELS, type VisitType } from '@/lib/visits'
 import { usePatients } from '@/hooks/usePatients'
-import type { Visit } from '@/types/database'
+import type { Patient, Visit } from '@/types/database'
 import { cn } from '@/lib/utils'
 
 interface Props {
   visit: Visit
   onView: (v: Visit) => void
+  patient?: Patient
 }
 
-export function SavedVisitCard({ visit, onView }: Props) {
+export function SavedVisitCard({ visit, onView, patient: patientProp }: Props) {
   const { data: patients } = usePatients()
   const del = useDeleteVisit()
   const toggleFav = useToggleVisitFavorite()
   const { setDraft } = useDraftVisit()
   const navigate = useNavigate()
 
-  const patient = patients?.find((p) => p.id === visit.patient_id)
+  // Prefer prop (parent already looked up); else fallback to find.
+  const patient = useMemo(
+    () => patientProp ?? patients?.find((p) => p.id === visit.patient_id),
+    [patientProp, patients, visit.patient_id],
+  )
 
   const handleDelete = () => {
     if (!confirm('למחוק את הביקור הזה? פעולה זו אינה הפיכה.')) return

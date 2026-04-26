@@ -57,6 +57,7 @@ export function Step1Patient({ draft, update }: Props) {
             onChange={(e) =>
               update({
                 visit_type: (e.target.value || null) as VisitType | null,
+                generated_template: null,
               })
             }
           >

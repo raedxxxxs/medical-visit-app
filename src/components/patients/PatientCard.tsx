@@ -24,7 +24,7 @@ export function PatientCard({ patient }: { patient: Patient }) {
   const handleDelete = () => {
     if (
       !confirm(
-        `למחוק את המטופל ${patient.patient_code} (${patient.initials})? כל הביקורים והמסמכים שלו יימחקו גם הם.`,
+        `למחוק את המטופל ${patient.patient_code} (${patient.initials})? כל הביקורים שלו יימחקו גם הם.`,
       )
     )
       return
