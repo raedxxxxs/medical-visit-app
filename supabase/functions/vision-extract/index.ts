@@ -4,6 +4,7 @@
 // פלט: JSON עם הערכים שזוהו (ללא שמירה ל-DB / Storage)
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { callAnthropic, AnthropicTimeoutError } from '../_shared/anthropic.ts'
 
 const ANTHROPIC_MODEL = 'claude-sonnet-4-6'
 const MAX_OUTPUT_TOKENS = 1024
@@ -173,23 +174,36 @@ Deno.serve(async (req) => {
           ? 'חלץ את פרטי המטופל והחזר JSON.'
           : 'זהה תרופות והחזר JSON.'
 
-    const anthropicRes = await callAnthropicWithRetry({
-      apiKey: anthropicKey,
-      model: ANTHROPIC_MODEL,
-      maxTokens: MAX_OUTPUT_TOKENS,
-      system: systemPrompt,
-      content: [
-        {
-          type: 'image',
-          source: {
-            type: 'base64',
-            media_type: media_type ?? 'image/jpeg',
-            data: image_base64,
+    let anthropicRes: Response
+    try {
+      anthropicRes = await callAnthropic({
+        apiKey: anthropicKey,
+        model: ANTHROPIC_MODEL,
+        maxTokens: MAX_OUTPUT_TOKENS,
+        system: systemPrompt,
+        content: [
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: media_type ?? 'image/jpeg',
+              data: image_base64,
+            },
           },
-        },
-        { type: 'text', text: instruction },
-      ],
-    })
+          { type: 'text', text: instruction },
+        ],
+        timeoutMs: 90_000,
+      })
+    } catch (e) {
+      if (e instanceof AnthropicTimeoutError) {
+        console.error('Anthropic call timed out')
+        return json(
+          { error: 'חילוץ הנתונים ארך זמן רב מדי. נסה שוב.' },
+          504,
+        )
+      }
+      throw e
+    }
 
     let claudeData: any
     try {
@@ -261,57 +275,3 @@ function parseJsonFromResponse(text: string): unknown {
   }
 }
 
-async function callAnthropicWithRetry(args: {
-  apiKey: string
-  model: string
-  maxTokens: number
-  system: string
-  content: unknown[]
-}): Promise<Response> {
-  const TIMEOUT_MS = 60_000
-  const MAX_ATTEMPTS = 3
-  let lastErr: unknown
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
-    try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        signal: controller.signal,
-        headers: {
-          'x-api-key': args.apiKey,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: args.model,
-          max_tokens: args.maxTokens,
-          system: args.system,
-          messages: [{ role: 'user', content: args.content }],
-        }),
-      })
-      clearTimeout(timer)
-      if (res.status === 429 || res.status >= 500) {
-        if (attempt < MAX_ATTEMPTS) {
-          const baseDelay = 1000 * 2 ** (attempt - 1)
-          const retryAfterHeader = res.headers.get('retry-after')
-          const retryAfterMs = retryAfterHeader
-            ? parseInt(retryAfterHeader, 10) * 1000
-            : 0
-          const delay = Math.max(baseDelay, retryAfterMs || 0)
-          await new Promise((r) => setTimeout(r, delay))
-          continue
-        }
-      }
-      return res
-    } catch (e) {
-      clearTimeout(timer)
-      lastErr = e
-      if (attempt < MAX_ATTEMPTS) {
-        await new Promise((r) => setTimeout(r, 1000 * 2 ** (attempt - 1)))
-        continue
-      }
-    }
-  }
-  throw lastErr ?? new Error('Anthropic call failed')
-}
