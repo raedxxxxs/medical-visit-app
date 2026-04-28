@@ -1,14 +1,20 @@
 // @ts-nocheck — runs in Deno on Supabase, not Node. TS errors here are harmless.
-// Supabase Edge Function: generate-visit (v2 — extracted text)
+// Supabase Edge Function: generate-visit (v4 — structured tool_use)
 // קלט: נתוני מטופל + רשימת מזהי הנחיות
-// פלט: שבלונה רפואית מובנית בעברית, מבוססת על הטקסט החולץ מההנחיות
+// פלט: JSON מובנה לפי VISIT_TEMPLATE_TOOL_SCHEMA. הלקוח מרנדר ל-markdown.
+//
+// Why tool_use replaced markdown+regex sanitizer:
+// The old flow asked Claude to emit a fixed markdown skeleton, then a server
+// regex stripped "בדיקה גופנית" sections and inline citations that leaked into
+// the body. Tool use makes the structure unforgeable — there is no field for
+// physical exam, and `sources` is the only place citations can land.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { callAnthropic, AnthropicTimeoutError } from '../_shared/anthropic.ts'
 
 const ANTHROPIC_MODEL = 'claude-sonnet-4-6'
 const MAX_OUTPUT_TOKENS = 4096
-const MAX_TEXT_PER_GUIDELINE = 400_000 // chars; safe upper bound
+const MAX_TEXT_PER_GUIDELINE = 400_000
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -17,87 +23,131 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+// Kept in sync with src/lib/visit-template.ts → VISIT_TEMPLATE_TOOL_SCHEMA.
+// Duplicated here because Deno edge functions don't share modules with the
+// Vite client bundle.
+const VISIT_TEMPLATE_TOOL = {
+  name: 'submit_visit_template',
+  description:
+    'שולח שבלונת ביקור מובנית לרופא. **חובה לקרוא לפונקציה הזו** עם כל השדות הנדרשים.',
+  input_schema: {
+    type: 'object',
+    required: [
+      'reason_for_visit',
+      'anamnesis',
+      'labs',
+      'assessment',
+      'recommendations',
+      'tests_ordered',
+      'next_visit',
+      'sources',
+    ],
+    properties: {
+      reason_for_visit: { type: 'string' },
+      anamnesis: { type: 'string' },
+      labs: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['name', 'value'],
+          properties: {
+            name: { type: 'string' },
+            value: { type: 'string' },
+            flag: { type: 'string', enum: ['high', 'low'] },
+          },
+        },
+      },
+      assessment: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['body'],
+          properties: {
+            heading: { type: 'string' },
+            body: { type: 'string' },
+          },
+        },
+      },
+      recommendations: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['items'],
+          properties: {
+            heading: { type: 'string' },
+            items: { type: 'array', items: { type: 'string' } },
+          },
+        },
+      },
+      tests_ordered: { type: 'array', items: { type: 'string' } },
+      next_visit: { type: 'string' },
+      sources: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['name', 'topic'],
+          properties: {
+            name: { type: 'string' },
+            section: { type: 'string' },
+            topic: { type: 'string' },
+            quote: { type: 'string' },
+          },
+        },
+      },
+    },
+  },
+}
+
 function getToneInstruction(tone: 'standard' | 'first_person' | 'educational'): string {
   if (tone === 'first_person') {
-    return `**טון הכתיבה**: גוף ראשון — מנקודת המבט של הרופא הבודק. השתמש בביטויים: "בדקתי...", "אני ממליץ...", "ראיתי כי...", "אבקש...". שמור על מקצועיות אבל עם טון אישי קליני.`
+    return `**טון הכתיבה**: גוף ראשון — "בדקתי...", "אני ממליץ...", "ראיתי כי...". מקצועי עם טון אישי קליני.`
   }
   if (tone === 'educational') {
-    return `**טון הכתיבה**: לימודי — הוסף הסברים קצרים על הרציונל הקליני שמאחורי כל המלצה (פתופיזיולוגיה, יעד טיפולי, מנגנון). מתאים לסטודנטים ומתמחים. עדיין תמציתי — בלי הרצאות ארוכות.`
+    return `**טון הכתיבה**: לימודי — הוסף הסבר קצר על הרציונל הקליני (פתופיזיולוגיה, יעד טיפולי, מנגנון). תמציתי.`
   }
   return `**טון הכתיבה**: מקצועי-קליני סטנדרטי, תמציתי, ניטרלי.`
 }
 
 function buildSystemPrompt(tone: 'standard' | 'first_person' | 'educational'): string {
-  return `אתה עוזר רפואי לרופא משפחה. אתה מייצר שבלונת ביקור בעברית.
+  return `אתה עוזר רפואי לרופא משפחה. אתה מייצר שבלונת ביקור בעברית ומגיש אותה דרך הכלי \`submit_visit_template\`.
 
 ${getToneInstruction(tone)}
 
 ═══════════════════════════════════════════════════
-חוקים אסורים מוחלטים — הפרת אחד מהם = פסילת כל הפלט
+חוקים מחייבים
 ═══════════════════════════════════════════════════
 
-🚫 חוק 1 — אסור בתכלית האיסור לכלול את הכותרת "בדיקה גופנית" או "Physical Examination" או כל וריאציה שלהן.
+🚫 **חובה לקרוא תמיד ל-\`submit_visit_template\`** עם כל השדות הנדרשים. אל תכתוב טקסט חופשי במקום זה.
 
-🚫 חוק 2 — אסור ציטוטים מההנחיות בגוף השבלונה (רק בסעיף "מקורות" בסוף).
-   אסור: ">  ציטוט", "*ADA Standards*", "Section X", "עמוד X", שמות הנחיות באמצע טקסט.
+🚫 **אסור** לכלול שדה "בדיקה גופנית". הסכמה לא מכילה אותו — אל תנסה להכניס אותו ל-anamnesis או assessment.
 
-🚫 חוק 3 — אסור באנגלית בגוף חוץ מ: שמות תרופות, ערכים+יחידות, קיצורים מקובלים (HbA1c, LDL, eGFR, BMI, ACE-I, ARB, SGLT2).
+🚫 **ציטוטים**: שדה \`sources\` הוא **המקום היחיד** למקורות וציטוטים. **אסור** ציטוטים, שמות הנחיות, "Section X", "ADA Standards", שמות מסמכים בתוך \`assessment\` או \`recommendations\` או \`anamnesis\`. אם תכתוב משהו כזה בגוף — הפלט פסול.
 
-═══════════════════════════════════════════════════
-מבנה הפלט המחייב — בדיוק כך, ללא תוספות
-═══════════════════════════════════════════════════
-
-## סיבת הגעה
-טקסט קצר.
-
-## אנמנזה ממוקדת
-פתח במשפט אחד שמסכם את **רקע המטופל** — גיל, מין, מחלות רקע (כולל אלה מהשדה "מחלות רקע" של המטופל וגם אלה שזוהו מתמונה/טקסט חופשי), תרופות עיקריות.
-לדוגמה: "מטופל בן 65, סוכרת מסוג 2, יתר לחץ דם, היפרליפידמיה, מטופל ב-Metformin 850mg x2/day, Atorvastatin 40mg HS, Lisinopril 10mg x1/day."
-לאחר מכן — תיאור התלונה הנוכחית והאנמנזה הממוקדת.
-
-## ערכי מעבדה
-פורמט מינימלי בלבד. כל שורה: \`שם בדיקה: ערך\`. אם הערך חריג — הוסף חץ ↑ (גבוה) או ↓ (נמוך) בסוף בלבד. **בלי** מבוא, **בלי** יחידות מודגשות, **בלי** הסברים, **בלי** קונטקסט, **בלי** רשימה ממוספרת.
-
-✅ נכון:
-\`\`\`
-HbA1c: 8.2 ↑
-LDL: 145 ↑
-eGFR: 62
-\`\`\`
-
-❌ אסור: "ערכים שהוזנו: HbA1c עומד על 8.2 (גבוה מהיעד)..."
-
-## הערכה
-ניתוח קליני, **ללא ציטוטים ובלי שמות הנחיות**.
-התייחס במפורש למינון ולתדירות של כל תרופה רלוונטית, וקבע אם הטיפול הנוכחי מספק.
-
-**אם המטופל סובל מ-3 או יותר מצבים כרוניים — סדר את ההערכה לפי מערכת/מחלה** עם תת-כותרות \`### סוכרת\`, \`### יתר לחץ דם\`, \`### שומנים\`, \`### כליות\`, וכו'. כל סעיף מסכם את המצב הנוכחי של אותה מחלה ספציפית.
-
-## המלצות
-המלצות ממוספרות. ניסוח קליני בלבד. **ללא ציטוטים. ללא Section/עמוד. ללא שמות הנחיות.**
-**אם 3+ מחלות כרוניות** — סדר גם את ההמלצות לפי תת-כותרות בסדר זהה ל"הערכה".
-**בכל המלצה לשינוי טיפול** — ציין מינון+תדירות חדשים (לדוגמה: "העלאה ל-Metformin 1000mg x2/day" או "הוספת Empagliflozin 10mg x1/day").
-
-## בדיקות שהוזמנו
-רשימה.
-
-## ביקור הבא
-מועד + מטרה.
-
-## מקורות
-**רק כאן** מותר ציטוטים. שורה לכל מקור: \`- [שם ההנחיה, סעיף/עמוד] — נושא: "ציטוט"\`
+🚫 **שפה**: עברית בלבד בגוף. אנגלית מותרת רק ל: שמות תרופות, ערכים+יחידות, קיצורים מקובלים (HbA1c, LDL, eGFR, BMI, ACE-I, ARB, SGLT2).
 
 ═══════════════════════════════════════════════════
-סיום קבוע (אחרי "מקורות"):
-
-ההמלצות הן כלי עזר. ההחלטה הקלינית היא של הרופא.
-
+תוכן השדות
 ═══════════════════════════════════════════════════
-דוגמת ניסוח נכון בסעיף "המלצות":
-✅ "1. התחלת SGLT2 Inhibitor (לדוג' Empagliflozin 10mg x1/day) בשל סוכרת + סיכון קרדיווסקולרי."
-❌ "1. התחלת SGLT2... > *ציטוט:* '...' — *ADA, Section 9*"
 
-זכור: הפרת חוק 1 או 2 = הפלט נפסל. החזר טקסט נקי, מוכן להעתקה למערכת קליקס.`
+**anamnesis**: פתח חובה במשפט אחד שמסכם את **רקע המטופל** — גיל, מין, מחלות רקע (גם מהשדה הרשמי וגם אלה שזוהו מתמונה/טקסט חופשי), תרופות עיקריות עם מינון.
+דוגמה: "מטופל בן 65, סוכרת מסוג 2, יתר לחץ דם, היפרליפידמיה, מטופל ב-Metformin 850mg x2/day, Atorvastatin 40mg HS, Lisinopril 10mg x1/day."
+לאחר משפט הרקע — תיאור התלונה הנוכחית והאנמנזה הממוקדת.
+
+**labs**: כל ערך = entry. אם חריג, סמן \`flag\`: "high" או "low". בלי הסברים, בלי קונטקסט.
+
+**assessment**:
+- אם 3+ מצבים כרוניים — entry אחד **לכל מערכת/מחלה** עם \`heading\` ("סוכרת", "יתר לחץ דם", "שומנים", "כליות", וכו).
+- אחרת — entry אחד עם \`heading\` ריק/לא מוגדר.
+- התייחס למינון ולתדירות של כל תרופה רלוונטית, וקבע אם הטיפול הנוכחי מספק.
+
+**recommendations**:
+- אם 3+ מצבים כרוניים — קבוצה לכל heading, באותו סדר כמו assessment.
+- אחרת — קבוצה אחת עם heading ריק.
+- בכל המלצה לשינוי תרופה ציין מינון+תדירות חדשים. דוגמה: "התחלת Empagliflozin 10mg x1/day".
+
+**sources**: שורה לכל מקור. \`name\` = שם ההנחיה, \`section\` = סעיף/עמוד (אופציונלי), \`topic\` = במה זה תומך, \`quote\` = ציטוט קצר (אופציונלי).
+
+זכור: **קרא תמיד לכלי**. אל תחזור עם טקסט בלבד — זה לא קביל.`
 }
 
 interface GenerateRequest {
@@ -155,7 +205,6 @@ Deno.serve(async (req) => {
     if (!Array.isArray(guideline_ids) || guideline_ids.length === 0) {
       return json({ error: 'יש לבחור לפחות הנחיה אחת' }, 400)
     }
-    // Reject pathologically large patient_data (DoS guard)
     if (patient_data && JSON.stringify(patient_data).length > 50_000) {
       return json({ error: 'נתוני מטופל גדולים מדי' }, 400)
     }
@@ -188,7 +237,7 @@ Deno.serve(async (req) => {
 
     const blocks: TextBlock[] = []
     let totalChars = 0
-    const TOTAL_BUDGET = 800_000 // ~200K tokens, well under 1M Anthropic limit
+    const TOTAL_BUDGET = 800_000
     for (const g of guidelines) {
       if (!g.extracted_text) continue
       let text = g.extracted_text as string
@@ -198,10 +247,7 @@ Deno.serve(async (req) => {
           '\n\n[... קוצר בגלל אורך — חלק מהטקסט הושמט]'
       }
       const remaining = TOTAL_BUDGET - totalChars
-      if (remaining <= 0) {
-        // Skip remaining guidelines to avoid exceeding token budget
-        break
-      }
+      if (remaining <= 0) break
       if (text.length > remaining) {
         text =
           text.slice(0, remaining) +
@@ -226,15 +272,25 @@ Deno.serve(async (req) => {
       ? body.tone
       : 'standard'
 
+    const systemBlocks = [
+      {
+        type: 'text' as const,
+        text: buildSystemPrompt(tone),
+        cache_control: { type: 'ephemeral' as const },
+      },
+    ]
+
     let anthropicRes: Response
     try {
       anthropicRes = await callAnthropic({
         apiKey: anthropicKey,
         model: ANTHROPIC_MODEL,
         maxTokens: MAX_OUTPUT_TOKENS,
-        system: buildSystemPrompt(tone),
+        system: systemBlocks,
         content: [...blocks, { type: 'text', text: userText }],
         timeoutMs: 120_000,
+        tools: [VISIT_TEMPLATE_TOOL],
+        tool_choice: { type: 'tool', name: 'submit_visit_template' },
       })
     } catch (e) {
       if (e instanceof AnthropicTimeoutError) {
@@ -266,18 +322,22 @@ Deno.serve(async (req) => {
 
     const responseBlocks = (claudeData.content ?? []) as Array<{
       type: string
-      text?: string
+      name?: string
+      input?: unknown
     }>
-    const rawText = responseBlocks
-      .filter((b) => b.type === 'text')
-      .map((b) => b.text ?? '')
-      .join('\n')
-      .trim()
-
-    const text = sanitizeTemplate(rawText)
+    const toolBlock = responseBlocks.find(
+      (b) => b.type === 'tool_use' && b.name === 'submit_visit_template',
+    )
+    if (!toolBlock || !toolBlock.input) {
+      console.error('Claude did not call submit_visit_template', claudeData)
+      return json(
+        { error: 'Claude לא החזיר תגובה מובנית. נסה שוב.', stop_reason: claudeData.stop_reason },
+        502,
+      )
+    }
 
     return json({
-      template: text,
+      template: toolBlock.input,
       usage: claudeData.usage,
       model: claudeData.model,
       guidelines_used: guidelines.map((g) => ({
@@ -303,65 +363,6 @@ function json(body: unknown, status = 200): Response {
   })
 }
 
-/**
- * Post-processor that enforces the structural rules regardless of model output:
- * 1. Removes "## בדיקה גופנית" section entirely (header + body until next ##).
- * 2. Strips inline citations from body sections (blockquotes with ציטוט/Section/ADA/etc),
- *    keeping them only in the ## מקורות section.
- */
-function sanitizeTemplate(input: string): string {
-  let text = input
-
-  // 1. Remove "בדיקה גופנית" section (and any English variants), from its header
-  // until the next "## " heading or end-of-text. JS regex doesn't support \Z; use lookahead with $.
-  const physExamPatterns = [
-    /^[ \t]*##[ \t]*בדיקה[ \t]*גופנית[\s\S]*?(?=^[ \t]*##[ \t]|$(?![\s\S]))/gm,
-    /^[ \t]*##[ \t]*Physical[ \t]*Examination[\s\S]*?(?=^[ \t]*##[ \t]|$(?![\s\S]))/gim,
-    /^[ \t]*##[ \t]*בדיקה[ \t]*קלינית[\s\S]*?(?=^[ \t]*##[ \t]|$(?![\s\S]))/gm,
-  ]
-  for (const re of physExamPatterns) text = text.replace(re, '')
-
-  // 2. Split into "body" and "מקורות" sections.
-  const sourcesIdx = text.search(/^[ \t]*##[ \t]*מקורות/m)
-  let body = sourcesIdx >= 0 ? text.slice(0, sourcesIdx) : text
-  const sources = sourcesIdx >= 0 ? text.slice(sourcesIdx) : ''
-
-  // 3. From the body only, remove inline citation BLOCKQUOTE lines.
-  // Only match lines that START with `>` (markdown blockquote) and look like citations.
-  body = body
-    .split('\n')
-    .filter((line) => {
-      const t = line.trim()
-      // Must be a blockquote AND contain explicit citation markers
-      if (!/^>/.test(t)) return true
-      if (/^>\s*\*{0,2}ציטוט/.test(t)) return false
-      // Strict guideline-citation pattern (must have all-caps doc name OR explicit "Standards of Care")
-      if (/(\bADA\b|\bNICE\b|\bAHA\b|Standards of Care|Section\s+\d+\b)/.test(t))
-        return false
-      return true
-    })
-    .join('\n')
-
-  // 4. Remove inline reference markers like " — *ADA Standards of Care 2026, Section 8*"
-  // Only match well-formed citation patterns wrapped in asterisks/em-dashes.
-  body = body
-    .replace(
-      /[—–-]\s*\*+[^*\n]*?(\bADA\b|\bNICE\b|\bAHA\b|Standards of Care|Section\s+\d+\b)[^*\n]*?\*+/g,
-      '',
-    )
-    .replace(/\(\s*(\bADA\b|\bNICE\b|\bAHA\b)[^)]*\)/g, '')
-    .replace(/\s*—\s*Section\s+\d+\b/g, '')
-
-  // 5. Collapse extra blank lines.
-  let result = (body + '\n' + sources).replace(/\n{3,}/g, '\n\n').trim()
-
-  // 6. Ensure final disclaimer present.
-  if (!/ההחלטה הקלינית היא של הרופא/.test(result)) {
-    result += '\n\nההמלצות הן כלי עזר. ההחלטה הקלינית היא של הרופא.'
-  }
-  return result
-}
-
 function buildPatientPrompt(args: {
   patient_data: Record<string, unknown>
   visit_type: string
@@ -373,8 +374,6 @@ function buildPatientPrompt(args: {
   parts.push(`# נתוני הביקור`)
   parts.push(`- סוג ביקור: ${visit_type}`)
   parts.push(`- תאריך: ${visit_date}`)
-  // Wrap untrusted patient text in XML tags so Claude treats it as data,
-  // not as instructions (mitigates prompt injection from notes/free text).
   if (patient_summary) {
     parts.push(`- מטופל: <patient_summary>${patient_summary}</patient_summary>`)
   }
@@ -408,7 +407,7 @@ function buildPatientPrompt(args: {
   }
 
   parts.push(
-    `\nצור שבלונת ביקור מלאה לפי המבנה הנדרש, מבוססת על ההנחיות שצורפו וערכי המטופל לעיל.`,
+    `\nקרא ל-\`submit_visit_template\` עם השבלונה המלאה לפי הסכמה.`,
   )
   return parts.join('\n')
 }

@@ -21,6 +21,7 @@ import { Progress } from '@/components/ui/progress'
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs'
 import { toast } from '@/components/ui/toaster'
 import { useSummarizeChart } from '@/hooks/useSummarizeChart'
+import { useCritiqueChart, type CritiqueResult } from '@/hooks/useCritiqueChart'
 import { cn } from '@/lib/utils'
 
 const MAX_IMAGES = 20
@@ -29,9 +30,11 @@ const MAX_MB = 10
 export function Hospitalization() {
   const inputRef = useRef<HTMLInputElement>(null)
   const summarize = useSummarizeChart('hospitalization')
+  const critique = useCritiqueChart()
   const [files, setFiles] = useState<File[]>([])
   const [error, setError] = useState<string | null>(null)
   const [summary, setSummary] = useState<string>('')
+  const [critiqueResult, setCritiqueResult] = useState<CritiqueResult | null>(null)
   const [copied, setCopied] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
 
@@ -101,14 +104,37 @@ export function Hospitalization() {
     }
     setError(null)
     setSummary('')
+    setCritiqueResult(null)
     try {
-      const res = await summarize.mutateAsync(files)
+      const res = await summarize.mutateAsync({
+        files,
+        mode: 'hospitalization',
+        onProgress: (acc) => setSummary(acc),
+      })
       setSummary(res.summary)
-      toast.success('סיכום האשפוז נוצר')
+      toast.success('סיכום האשפוז נוצר — מאמת...')
+
+      // Self-critique pass: ask Claude (with vision) to re-check the summary
+      // against the source images. If it returns a revised version, replace.
+      // Failures here are non-fatal — keep the first-pass summary.
+      try {
+        const result = await critique.mutateAsync({ files, draft: res.summary })
+        setCritiqueResult(result)
+        if (result.verdict === 'revised' && result.revised_summary) {
+          setSummary(result.revised_summary)
+          toast.success(`הסיכום עודכן (${result.corrections.length} תיקונים)`)
+        } else {
+          toast.success('הסיכום אומת')
+        }
+      } catch (critErr) {
+        // Don't block — surface as a soft notice only.
+        console.warn('critique failed', critErr)
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'שגיאה ביצירת הסיכום'
       setError(msg)
       toast.error(msg)
+      setSummary('')
     }
   }
 
@@ -247,6 +273,15 @@ export function Hospitalization() {
           </div>
         )}
 
+        {critique.isPending && (
+          <div className="flex flex-col gap-2">
+            <Progress label="בקרת איכות — Claude משווה את הסיכום למקור" />
+            <p className="text-xs text-text-muted" aria-live="polite">
+              בודק את הסיכום מול תמונות המקור...
+            </p>
+          </div>
+        )}
+
         <Button
           onClick={handleSummarize}
           loading={summarize.isPending}
@@ -266,15 +301,49 @@ export function Hospitalization() {
             <h3 className="text-lg font-semibold tracking-tight text-text">
               סיכום האשפוז
             </h3>
-            <Button onClick={handleCopy} size="sm" variant="outline">
-              {copied ? (
-                <Check className="h-4 w-4 text-[--color-success-fg] animate-scale-in" />
-              ) : (
-                <Copy className="h-4 w-4" />
+            <div className="flex items-center gap-2">
+              {critiqueResult && (
+                <span
+                  className={cn(
+                    'rounded-full px-2 py-0.5 text-xs font-medium',
+                    critiqueResult.verdict === 'ok'
+                      ? 'bg-[--color-success-bg] text-[--color-success-fg]'
+                      : 'bg-[--color-warning-bg] text-[--color-warning-fg]',
+                  )}
+                  title={
+                    critiqueResult.verdict === 'ok'
+                      ? 'בקרה: הסיכום נמצא תקין מול המקור'
+                      : `בקרה: בוצעו ${critiqueResult.corrections.length} תיקונים`
+                  }
+                >
+                  {critiqueResult.verdict === 'ok'
+                    ? '✓ אומת'
+                    : `⚠ עודכן (${critiqueResult.corrections.length})`}
+                </span>
               )}
-              {copied ? 'הועתק' : 'העתק'}
-            </Button>
+              <Button onClick={handleCopy} size="sm" variant="outline">
+                {copied ? (
+                  <Check className="h-4 w-4 text-[--color-success-fg] animate-scale-in" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+                {copied ? 'הועתק' : 'העתק'}
+              </Button>
+            </div>
           </div>
+          {critiqueResult?.verdict === 'revised' &&
+            critiqueResult.corrections.length > 0 && (
+              <details className="rounded-[--radius-sm] border border-[--color-warning-fg]/30 bg-[--color-warning-bg] p-3 text-sm text-[--color-warning-fg]">
+                <summary className="cursor-pointer font-medium">
+                  תיקונים שנעשו בבקרה ({critiqueResult.corrections.length})
+                </summary>
+                <ul className="mt-2 list-inside list-disc space-y-1 text-xs">
+                  {critiqueResult.corrections.map((c, i) => (
+                    <li key={i}>{c}</li>
+                  ))}
+                </ul>
+              </details>
+            )}
           <Textarea
             value={summary}
             onChange={(e) => setSummary(e.target.value)}

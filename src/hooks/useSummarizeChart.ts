@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { streamEdgeFunction } from '@/lib/anthropic-stream'
 
 async function fileToBase64(file: File): Promise<string> {
   const buf = await file.arrayBuffer()
@@ -16,21 +16,30 @@ export type SummaryMode = 'chart' | 'hospitalization'
 
 export interface ChartSummaryResponse {
   summary: string
-  mode?: SummaryMode
+  mode: SummaryMode
   images_processed: number
   usage?: unknown
   model?: string
 }
 
+interface SummarizeInput {
+  files: File[]
+  mode?: SummaryMode
+  onProgress?: (accumulated: string) => void
+  signal?: AbortSignal
+}
+
 export function useSummarizeChart(defaultMode: SummaryMode = 'chart') {
   return useMutation({
     mutationFn: async (
-      input: File[] | { files: File[]; mode?: SummaryMode },
+      input: File[] | SummarizeInput,
     ): Promise<ChartSummaryResponse> => {
       const files = Array.isArray(input) ? input : input.files
       const mode: SummaryMode = Array.isArray(input)
         ? defaultMode
         : input.mode ?? defaultMode
+      const onProgress = Array.isArray(input) ? undefined : input.onProgress
+      const signal = Array.isArray(input) ? undefined : input.signal
 
       const validImages = files.filter((f) => f.type.startsWith('image/'))
       if (validImages.length === 0) {
@@ -43,26 +52,25 @@ export function useSummarizeChart(defaultMode: SummaryMode = 'chart') {
         })),
       )
 
-      const { data, error } = await supabase.functions.invoke<ChartSummaryResponse>(
+      const result = await streamEdgeFunction(
         'summarize-chart',
-        { body: { images, mode } },
+        { images, mode },
+        {
+          onDelta: (_chunk, accumulated) => onProgress?.(accumulated),
+          signal,
+        },
       )
 
-      if (error) {
-        let detail = error.message
-        try {
-          const ctx = error.context as Response | undefined
-          if (ctx?.json) {
-            const body = await ctx.json()
-            if (body?.error) detail = body.error
-          }
-        } catch {
-          // ignore
-        }
-        throw new Error(detail)
+      const summary = result.text.trim()
+      if (!summary) throw new Error('סיכום ריק')
+
+      return {
+        summary,
+        mode,
+        images_processed: validImages.length,
+        usage: result.usage,
+        model: result.model,
       }
-      if (!data?.summary) throw new Error('סיכום ריק')
-      return data
     },
   })
 }

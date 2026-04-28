@@ -101,13 +101,17 @@ export function PatientChart() {
     setError(null)
     setSummary('')
     try {
-      const res = await summarize.mutateAsync(files)
+      const res = await summarize.mutateAsync({
+        files,
+        onProgress: (acc) => setSummary(acc),
+      })
       setSummary(res.summary)
       toast.success('הסיכום נוצר')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'שגיאה ביצירת הסיכום'
       setError(msg)
       toast.error(msg)
+      setSummary('')
     }
   }
 

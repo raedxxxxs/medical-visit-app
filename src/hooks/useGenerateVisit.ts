@@ -1,17 +1,28 @@
 import { useMutation } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { renderVisitTemplate, type VisitTemplate } from '@/lib/visit-template'
 import type { VisitDraft } from '@/lib/visits'
 
 export interface GenerateResponse {
+  /** Markdown rendering of the structured template — what's persisted as `generated_template`. */
   template: string
+  /** Raw structured data — useful for future per-section editing. */
+  structured: VisitTemplate
   usage?: {
-    input_tokens: number
-    output_tokens: number
+    input_tokens?: number
+    output_tokens?: number
     cache_creation_input_tokens?: number
     cache_read_input_tokens?: number
   }
   model?: string
   guidelines_used?: { id: string; title: string }[]
+}
+
+interface ServerResponse {
+  template: VisitTemplate
+  usage?: GenerateResponse['usage']
+  model?: string
+  guidelines_used?: GenerateResponse['guidelines_used']
 }
 
 export function useGenerateVisit() {
@@ -26,7 +37,7 @@ export function useGenerateVisit() {
         throw new Error('יש לבחור לפחות הנחיה אחת')
       }
 
-      const { data, error } = await supabase.functions.invoke<GenerateResponse>(
+      const { data, error } = await supabase.functions.invoke<ServerResponse>(
         'generate-visit',
         {
           body: {
@@ -55,18 +66,22 @@ export function useGenerateVisit() {
                 typeof body.error === 'string'
                   ? body.error
                   : JSON.stringify(body.error)
-              if (body.details) {
-                detail += ` | ${JSON.stringify(body.details).slice(0, 300)}`
-              }
             }
           }
         } catch {
-          // ignore parse errors, fall back to message
+          // ignore
         }
         throw new Error(detail)
       }
-      if (!data) throw new Error('תגובה ריקה מהשרת')
-      return data
+      if (!data?.template) throw new Error('תגובה ריקה מהשרת')
+
+      return {
+        template: renderVisitTemplate(data.template),
+        structured: data.template,
+        usage: data.usage,
+        model: data.model,
+        guidelines_used: data.guidelines_used,
+      }
     },
   })
 }

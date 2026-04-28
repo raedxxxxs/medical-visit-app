@@ -6,8 +6,20 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { callAnthropic, AnthropicTimeoutError } from '../_shared/anthropic.ts'
 
-const ANTHROPIC_MODEL = 'claude-sonnet-4-6'
-const MAX_OUTPUT_TOKENS = 4096
+// Hospitalization summaries benefit from deeper clinical reasoning (extracting
+// medication changes, follow-up needs across many pages of discharge papers).
+// Use Opus 4.7 + a small thinking budget for that path; keep Sonnet for plain
+// chart summaries which are mostly transcription-shaped work.
+const MODEL_BY_MODE = {
+  chart: 'claude-sonnet-4-6',
+  hospitalization: 'claude-opus-4-7',
+} as const
+// max_tokens must exceed thinking.budget_tokens, hence the bump for opus path.
+const MAX_OUTPUT_TOKENS_BY_MODE = {
+  chart: 4096,
+  hospitalization: 6144,
+} as const
+const THINKING_BUDGET_HOSPITALIZATION = 2000
 const MAX_IMAGES = 20
 // Anthropic vision API caps base64 around 5MB per image. Reject earlier.
 const MAX_BASE64_PER_IMAGE = 5_400_000 // ~4MB raw
@@ -141,9 +153,48 @@ function getUserInstruction(mode: SummaryMode): string {
     : 'סכם את תיק המטופל לפי המבנה שהוגדר ב-system prompt.'
 }
 
+// Self-critique system prompt. Used in the second pass on hospitalization
+// summaries: re-shows the source images plus the candidate summary, and asks
+// Claude to either confirm it's faithful or return a corrected version.
+// Returned via tool_use so we get a typed shape (verdict + revised_summary).
+const CRITIQUE_PROMPT = `אתה מבקר רפואי. קיבלת תמונות מקור של מסמכי אשפוז ותיוטה ראשונית של סיכום אשפוז שיוצר על ידי מודל אחר.
+
+המשימה שלך:
+1. עבור על התמונות בקפידה.
+2. השווה את הסיכום הראשוני לתמונות.
+3. זהה: עובדות שגויות, פרטים שהומצאו ולא קיימים במקור, פרטים חשובים שנשמטו (במיוחד תרופות חדשות, שינויי מינון, בדיקות מעקב, דגלים אדומים).
+4. החזר תוצאה דרך הכלי \`submit_review\`:
+   - verdict="ok" אם הסיכום מדויק וכולל את כל המידע החשוב — אז revised_summary לא נדרש.
+   - verdict="revised" אם יש בעיות — אז revised_summary חייב להכיל סיכום מתוקן ושלם (באותו מבנה Markdown של הסיכום המקורי), ו-corrections רשימה של הבעיות שמצאת.
+
+חוקים: אל תמציא מידע. אם משהו לא ברור בתמונות, ציין במפורש "לא ברור מהמסמכים". שמור על אותו פורמט markdown של הסיכום המקורי.`
+
+const REVIEW_TOOL = {
+  name: 'submit_review',
+  description: 'מחזיר את תוצאת בקרת האיכות על הסיכום.',
+  input_schema: {
+    type: 'object',
+    required: ['verdict', 'corrections'],
+    properties: {
+      verdict: { type: 'string', enum: ['ok', 'revised'] },
+      corrections: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'רשימת בעיות שמצאת. ריק אם verdict=ok.',
+      },
+      revised_summary: {
+        type: 'string',
+        description: 'סיכום מתוקן באותו מבנה. נדרש רק כש-verdict=revised.',
+      },
+    },
+  },
+}
+
 interface SummarizeRequest {
   images: { base64: string; media_type: string }[]
   mode?: SummaryMode
+  /** When set, bypass first-pass summarization and run a critique against this draft instead. */
+  critique_draft?: string
 }
 
 Deno.serve(async (req) => {
@@ -195,6 +246,20 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Critique branch: client passes a draft summary, we re-show the source
+    // images and ask Claude to either confirm or correct it. Returns JSON
+    // (non-streaming) — this is a verification step, not a generation step.
+    if (typeof body.critique_draft === 'string' && body.critique_draft.trim()) {
+      if (body.critique_draft.length > 50_000) {
+        return json({ error: 'טקסט הסיכום ארוך מדי לבקרה' }, 400)
+      }
+      return await runCritique({
+        anthropicKey,
+        images,
+        draft: body.critique_draft,
+      })
+    }
+
     const content: any[] = images.map((img) => ({
       type: 'image',
       source: {
@@ -208,15 +273,30 @@ Deno.serve(async (req) => {
       text: getUserInstruction(mode),
     })
 
+    // Cache the (long, mode-specific) system prompt so subsequent summaries
+    // in the same 5-minute window pay only a fraction of the input tokens.
+    const systemBlocks = [
+      {
+        type: 'text' as const,
+        text: getSystemPrompt(mode),
+        cache_control: { type: 'ephemeral' as const },
+      },
+    ]
+
     let anthropicRes: Response
     try {
       anthropicRes = await callAnthropic({
         apiKey: anthropicKey,
-        model: ANTHROPIC_MODEL,
-        maxTokens: MAX_OUTPUT_TOKENS,
-        system: getSystemPrompt(mode),
+        model: MODEL_BY_MODE[mode],
+        maxTokens: MAX_OUTPUT_TOKENS_BY_MODE[mode],
+        system: systemBlocks,
         content,
         timeoutMs: 120_000,
+        stream: true,
+        thinking:
+          mode === 'hospitalization'
+            ? { type: 'enabled', budget_tokens: THINKING_BUDGET_HOSPITALIZATION }
+            : undefined,
       })
     } catch (e) {
       if (e instanceof AnthropicTimeoutError) {
@@ -229,15 +309,14 @@ Deno.serve(async (req) => {
       throw e
     }
 
-    let claudeData: any
-    try {
-      claudeData = await anthropicRes.json()
-    } catch (parseErr) {
-      console.error('Failed to parse Anthropic response', parseErr)
-      return json({ error: 'תגובה לא תקינה מ-Claude' }, 502)
-    }
     if (!anthropicRes.ok) {
-      console.error('Claude API error', anthropicRes.status, claudeData)
+      let errBody: any = null
+      try {
+        errBody = await anthropicRes.json()
+      } catch {
+        // ignore
+      }
+      console.error('Claude API error', anthropicRes.status, errBody)
       const status = anthropicRes.status === 429 ? 429 : 502
       const safeMsg =
         anthropicRes.status === 429
@@ -246,22 +325,14 @@ Deno.serve(async (req) => {
       return json({ error: safeMsg }, status)
     }
 
-    const responseBlocks = (claudeData.content ?? []) as Array<{
-      type: string
-      text?: string
-    }>
-    const summary = responseBlocks
-      .filter((b) => b.type === 'text')
-      .map((b) => b.text ?? '')
-      .join('\n')
-      .trim()
-
-    return json({
-      summary,
-      mode,
-      usage: claudeData.usage,
-      model: claudeData.model,
-      images_processed: images.length,
+    return new Response(anthropicRes.body, {
+      status: 200,
+      headers: {
+        ...corsHeaders,
+        'content-type': 'text/event-stream',
+        'cache-control': 'no-cache, no-transform',
+        'x-accel-buffering': 'no',
+      },
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
@@ -273,6 +344,104 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, 'content-type': 'application/json' },
+  })
+}
+
+async function runCritique(args: {
+  anthropicKey: string
+  images: { base64: string; media_type: string }[]
+  draft: string
+}): Promise<Response> {
+  const { anthropicKey, images, draft } = args
+  const content: any[] = images.map((img) => ({
+    type: 'image',
+    source: {
+      type: 'base64',
+      media_type: img.media_type ?? 'image/jpeg',
+      data: img.base64,
+    },
+  }))
+  // Wrap the candidate summary in XML tags so injected directives can't
+  // hijack the critique step (defense-in-depth — the draft was generated
+  // from the same images but could have echoed adversarial OCR text).
+  content.push({
+    type: 'text',
+    text: `<candidate_summary>\n${draft}\n</candidate_summary>\n\nבדוק את הסיכום למעלה מול תמונות המקור והחזר תשובה דרך submit_review.`,
+  })
+
+  let res: Response
+  try {
+    res = await callAnthropic({
+      apiKey: anthropicKey,
+      model: 'claude-opus-4-7',
+      maxTokens: 6144,
+      system: [
+        {
+          type: 'text' as const,
+          text: CRITIQUE_PROMPT,
+          cache_control: { type: 'ephemeral' as const },
+        },
+      ],
+      content,
+      timeoutMs: 120_000,
+      tools: [REVIEW_TOOL],
+      tool_choice: { type: 'tool', name: 'submit_review' },
+    })
+  } catch (e) {
+    if (e instanceof AnthropicTimeoutError) {
+      return json({ error: 'בקרת האיכות ארכה זמן רב מדי' }, 504)
+    }
+    throw e
+  }
+
+  let data: any
+  try {
+    data = await res.json()
+  } catch {
+    return json({ error: 'תגובה לא תקינה מ-Claude' }, 502)
+  }
+  if (!res.ok) {
+    const status = res.status === 429 ? 429 : 502
+    return json(
+      {
+        error:
+          res.status === 429
+            ? 'יותר מדי בקשות, נסה שוב בעוד רגע'
+            : 'שגיאה בבקרת האיכות',
+      },
+      status,
+    )
+  }
+
+  const blocks = (data.content ?? []) as Array<{
+    type: string
+    name?: string
+    input?: any
+  }>
+  const tool = blocks.find(
+    (b) => b.type === 'tool_use' && b.name === 'submit_review',
+  )
+  if (!tool?.input) {
+    return json({ error: 'Claude לא החזיר בקרה מובנית' }, 502)
+  }
+
+  const verdict = tool.input.verdict === 'revised' ? 'revised' : 'ok'
+  const corrections: string[] = Array.isArray(tool.input.corrections)
+    ? tool.input.corrections.filter((c: unknown) => typeof c === 'string')
+    : []
+  const revised: string | null =
+    typeof tool.input.revised_summary === 'string' && tool.input.revised_summary.trim()
+      ? tool.input.revised_summary
+      : null
+
+  return json({
+    critique: {
+      verdict,
+      corrections,
+      revised_summary: verdict === 'revised' ? revised : null,
+    },
+    usage: data.usage,
+    model: data.model,
   })
 }
 

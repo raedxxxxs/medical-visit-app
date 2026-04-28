@@ -14,16 +14,61 @@ export class AnthropicTimeoutError extends Error {
   }
 }
 
+interface SystemBlock {
+  type: 'text'
+  text: string
+  cache_control?: { type: 'ephemeral' }
+}
+
+interface ThinkingConfig {
+  type: 'enabled'
+  budget_tokens: number
+}
+
+interface Tool {
+  name: string
+  description?: string
+  input_schema: Record<string, unknown>
+}
+
+type ToolChoice =
+  | { type: 'auto' }
+  | { type: 'any' }
+  | { type: 'tool'; name: string }
+
 export interface CallAnthropicArgs {
   apiKey: string
   model: string
   maxTokens: number
-  system: string
+  /** Either a plain string, or an array of system blocks (use blocks to enable cache_control). */
+  system: string | SystemBlock[]
   content: unknown[]
   /** Per-attempt wall-clock timeout. Default 120s. */
   timeoutMs?: number
   /** Max attempts on 429/5xx (NOT on timeouts). Default 2. */
   maxRetriesOn5xx?: number
+  /** Optional extended-thinking config. Requires maxTokens > budget_tokens. */
+  thinking?: ThinkingConfig
+  /** When true, request a streaming response (SSE). Caller proxies/consumes the stream. */
+  stream?: boolean
+  /** Optional tools — pair with tool_choice to force structured output. */
+  tools?: Tool[]
+  /** Pin Claude to a specific tool to guarantee structured output shape. */
+  tool_choice?: ToolChoice
+}
+
+function buildBody(args: CallAnthropicArgs): string {
+  const body: Record<string, unknown> = {
+    model: args.model,
+    max_tokens: args.maxTokens,
+    system: args.system,
+    messages: [{ role: 'user', content: args.content }],
+  }
+  if (args.thinking) body.thinking = args.thinking
+  if (args.stream) body.stream = true
+  if (args.tools) body.tools = args.tools
+  if (args.tool_choice) body.tool_choice = args.tool_choice
+  return JSON.stringify(body)
 }
 
 /**
@@ -35,7 +80,10 @@ export interface CallAnthropicArgs {
  *    `retry-after`.
  *
  * Returns the raw Response. Caller is responsible for parsing JSON and mapping
- * non-OK statuses to user-facing errors.
+ * non-OK statuses to user-facing errors. When `stream: true`, the response body
+ * is a Server-Sent Events stream that the caller is responsible for consuming
+ * or proxying — the timeout still applies to the time-to-first-byte; downstream
+ * read time is not bounded here.
  */
 export async function callAnthropic(args: CallAnthropicArgs): Promise<Response> {
   const timeoutMs = args.timeoutMs ?? 120_000
@@ -54,12 +102,7 @@ export async function callAnthropic(args: CallAnthropicArgs): Promise<Response> 
           'anthropic-version': '2023-06-01',
           'content-type': 'application/json',
         },
-        body: JSON.stringify({
-          model: args.model,
-          max_tokens: args.maxTokens,
-          system: args.system,
-          messages: [{ role: 'user', content: args.content }],
-        }),
+        body: buildBody(args),
       })
     } catch (e) {
       clearTimeout(timer)

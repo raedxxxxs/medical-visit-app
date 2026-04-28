@@ -79,7 +79,10 @@ export function Step3Review({ draft, update }: Props) {
       const priorTemplate = draft.generated_template
       const priorTone = draft.tone
       const priorGuidelines = [...draft.guidelines_selected]
-      const res = await generate.mutateAsync({ draft, patient_summary: summary })
+      const res = await generate.mutateAsync({
+        draft,
+        patient_summary: summary,
+      })
       const versions = [...(draft.template_versions ?? [])]
       if (priorTemplate) {
         versions.unshift({
