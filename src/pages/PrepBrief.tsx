@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   AlertOctagon,
@@ -84,10 +84,27 @@ export function PrepBrief() {
     if (!patientId) return new Set()
     return new Set(getCheckedItems(patientId, date))
   })
+  // Track which patient/date this state belongs to so we never persist one
+  // patient's checks into another patient's bucket.
+  const checkedKeyRef = useRef<string>(patientId ? `${patientId}:${date}` : '')
 
-  // Persist checked items so they survive navigation.
+  // Reload checked items whenever the patient or date changes.
+  useEffect(() => {
+    if (!patientId) {
+      setCheckedItems(new Set())
+      checkedKeyRef.current = ''
+      return
+    }
+    setCheckedItems(new Set(getCheckedItems(patientId, date)))
+    checkedKeyRef.current = `${patientId}:${date}`
+  }, [patientId, date])
+
+  // Persist checked items, but only if the state still corresponds to the
+  // current patient+date (guards against the brief async state update
+  // overwriting a freshly-loaded patient).
   useEffect(() => {
     if (!patientId) return
+    if (checkedKeyRef.current !== `${patientId}:${date}`) return
     persistCheckedItems(patientId, date, Array.from(checkedItems))
   }, [patientId, date, checkedItems])
 
