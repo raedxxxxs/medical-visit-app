@@ -38,6 +38,9 @@ export function useSaveVisit() {
           labs: draft.labs,
           vitals: draft.vitals,
           anamnesis: draft.anamnesis,
+          template_versions: draft.template_versions ?? [],
+          next_visit_due: draft.next_visit_due ?? null,
+          tone: draft.tone,
         },
         generated_template: draft.generated_template,
         guidelines_used:

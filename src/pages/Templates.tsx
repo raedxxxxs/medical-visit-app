@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Search, AlertCircle, History, Star } from 'lucide-react'
-import { Input } from '@/components/ui/input'
+import { AlertCircle, History, Star, FileText } from 'lucide-react'
+import { SearchInput } from '@/components/ui/search-input'
 import { Select } from '@/components/ui/select'
 import {
   Tabs,
@@ -8,6 +8,8 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs'
+import { SkeletonRow } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/ui/empty-state'
 import { useVisits } from '@/hooks/useVisits'
 import { usePatients } from '@/hooks/usePatients'
 import { SavedVisitCard } from '@/components/templates/SavedVisitCard'
@@ -45,14 +47,14 @@ export function Templates() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-2xl font-bold text-text">שבלונות שמורות</h2>
+        <h2 className="text-3xl font-bold tracking-tighter text-text">שבלונות שמורות</h2>
         <p className="text-text-muted">היסטוריית ביקורים ותבניות אישיות</p>
       </div>
 
       <Tabs defaultValue="visits">
         <TabsList>
           <TabsTrigger value="visits">
-            <History className="mr-1 inline h-4 w-4" />
+            <History className="me-1 inline h-4 w-4" />
             ביקורים שמורים
           </TabsTrigger>
           <TabsTrigger value="personal">תבניות אישיות</TabsTrigger>
@@ -61,19 +63,17 @@ export function Templates() {
         <TabsContent value="visits">
           <div className="flex flex-col gap-4">
             <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-              <div className="relative">
-                <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
-                <Input
-                  placeholder="חיפוש לפי מטופל / תאריך / תוכן השבלונה..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pr-10"
-                />
-              </div>
+              <SearchInput
+                placeholder="חיפוש לפי מטופל / תאריך / תוכן השבלונה..."
+                value={search}
+                onValueChange={setSearch}
+                aria-label="חיפוש ביקורים"
+              />
               <Select
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
                 className="sm:w-48"
+                aria-label="סינון לפי סוג ביקור"
               >
                 <option value="">כל סוגי הביקור</option>
                 {VISIT_TYPES.map((t) => (
@@ -84,21 +84,30 @@ export function Templates() {
               </Select>
             </div>
 
-            {isLoading && <p className="text-text-muted">טוען...</p>}
+            {isLoading && (
+              <div className="flex flex-col gap-2">
+                <SkeletonRow />
+                <SkeletonRow />
+                <SkeletonRow />
+              </div>
+            )}
 
             {error && (
-              <div className="flex items-center gap-2 rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+              <div
+                role="alert"
+                className="flex items-center gap-2 rounded-[--radius-md] border border-[--color-danger-fg]/20 bg-[--color-danger-bg] p-3 text-sm text-[--color-danger-fg]"
+              >
                 <AlertCircle className="h-4 w-4" />
                 {error instanceof Error ? error.message : 'שגיאה בטעינה'}
               </div>
             )}
 
             {!isLoading && !error && (visits?.length ?? 0) === 0 && (
-              <div className="rounded-lg border border-dashed border-border bg-surface p-8 text-center">
-                <p className="text-text-muted">
-                  אין ביקורים שמורים. צור ביקור חדש מהדף "ביקור חדש".
-                </p>
-              </div>
+              <EmptyState
+                icon={<FileText className="h-5 w-5" />}
+                title="אין ביקורים שמורים"
+                description='צור ביקור חדש מהדף "ביקור חדש" כדי לראות אותו כאן.'
+              />
             )}
 
             {!isLoading &&
@@ -110,16 +119,18 @@ export function Templates() {
             {favorites.length > 0 && (
               <section className="flex flex-col gap-2">
                 <h3 className="flex items-center gap-1 text-sm font-semibold text-text-muted">
-                  <Star className="h-4 w-4 fill-warning text-warning" />
+                  <Star className="h-4 w-4 fill-[--color-warning-fg] text-[--color-warning-fg]" />
                   מועדפים
                 </h3>
                 <div className="flex flex-col gap-2">
-                  {favorites.map((v) => (
-                    <SavedVisitCard
+                  {favorites.map((v, i) => (
+                    <div
                       key={v.id}
-                      visit={v}
-                      onView={setSelectedVisit}
-                    />
+                      className="animate-fade-in-up"
+                      style={{ animationDelay: `${Math.min(i, 6) * 40}ms` }}
+                    >
+                      <SavedVisitCard visit={v} onView={setSelectedVisit} />
+                    </div>
                   ))}
                 </div>
               </section>
@@ -133,12 +144,14 @@ export function Templates() {
                   </h3>
                 )}
                 <div className="flex flex-col gap-2">
-                  {others.map((v) => (
-                    <SavedVisitCard
+                  {others.map((v, i) => (
+                    <div
                       key={v.id}
-                      visit={v}
-                      onView={setSelectedVisit}
-                    />
+                      className="animate-fade-in-up"
+                      style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
+                    >
+                      <SavedVisitCard visit={v} onView={setSelectedVisit} />
+                    </div>
                   ))}
                 </div>
               </section>
@@ -147,11 +160,11 @@ export function Templates() {
         </TabsContent>
 
         <TabsContent value="personal">
-          <div className="rounded-lg border border-dashed border-border bg-surface p-8 text-center">
-            <p className="text-text-muted">
-              תבניות אישיות יישמרו כאן בהמשך — כרגע ניתן לשמור ביקורים בלבד.
-            </p>
-          </div>
+          <EmptyState
+            icon={<FileText className="h-5 w-5" />}
+            title="תבניות אישיות"
+            description="תבניות אישיות יישמרו כאן בהמשך — כרגע ניתן לשמור ביקורים בלבד."
+          />
         </TabsContent>
       </Tabs>
 

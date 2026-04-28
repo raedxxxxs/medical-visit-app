@@ -5,7 +5,7 @@
 @theme {
   --font-sans: 'Heebo', system-ui, -apple-system, sans-serif;
 
-  /* Medical palette: teal-blue primary, accents */
+  /* Medical palette: teal-blue primary (unchanged) */
   --color-primary-50: #eefdfd;
   --color-primary-100: #d2f8f9;
   --color-primary-200: #aaeff2;
@@ -17,35 +17,258 @@
   --color-primary-800: #185868;
   --color-primary-900: #194a58;
 
+  /* Neutral scale 50–950 */
+  --color-neutral-50: #f8fafc;
+  --color-neutral-100: #f1f5f9;
+  --color-neutral-200: #e2e8f0;
+  --color-neutral-300: #cbd5e1;
+  --color-neutral-400: #94a3b8;
+  --color-neutral-500: #64748b;
+  --color-neutral-600: #475569;
+  --color-neutral-700: #334155;
+  --color-neutral-800: #1e293b;
+  --color-neutral-900: #0f172a;
+  --color-neutral-950: #060b14;
+
+  /* Semantic — legacy single-token aliases (kept for compat with older usages) */
   --color-success: #16a34a;
   --color-warning: #f59e0b;
   --color-danger: #dc2626;
+
+  /* Typography scale */
+  --text-h1: 2rem;
+  --text-h1--line-height: 2.5rem;
+  --text-h1--letter-spacing: -0.02em;
+  --text-h1--font-weight: 700;
+
+  --text-h2: 1.5rem;
+  --text-h2--line-height: 2rem;
+  --text-h2--letter-spacing: -0.015em;
+  --text-h2--font-weight: 700;
+
+  --text-h3: 1.125rem;
+  --text-h3--line-height: 1.625rem;
+  --text-h3--letter-spacing: -0.01em;
+  --text-h3--font-weight: 600;
+
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.55;
+  --text-body--font-weight: 400;
+
+  --text-small: 0.8125rem;
+  --text-small--line-height: 1.45;
+  --text-small--letter-spacing: 0.005em;
+  --text-small--font-weight: 500;
+
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.4;
+  --text-caption--letter-spacing: 0.02em;
+  --text-caption--font-weight: 500;
+
+  /* Radius scale (3 sizes only) */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+
+  /* Motion */
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Animations exposed as utilities */
+  --animate-fade-in: fade-in 200ms var(--ease-out-soft) both;
+  --animate-fade-in-up: fade-in-up 220ms var(--ease-out-soft) both;
+  --animate-scale-in: scale-in 200ms var(--ease-out-soft) both;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-progress-indeterminate: progress-indeterminate 1.4s var(--ease-in-out) infinite;
+  --animate-check-draw: check-draw 280ms var(--ease-out-soft) both;
+  --animate-rotate-icon: rotate-icon 320ms var(--ease-out-soft) both;
+  --animate-pulse-soft: pulse-soft 2s var(--ease-in-out) infinite;
 }
 
 /* Light theme (default) — semantic tokens */
 :root {
   --color-surface: #ffffff;
-  --color-muted: #f8fafc;
-  --color-border: #e2e8f0;
-  --color-text: #0f172a;
-  --color-text-muted: #64748b;
+  --color-surface-2: #f8fafc;
+  --color-surface-sunk: #f1f5f9;
+  --color-muted: #f6f8fb;
+  --color-border: #e5ebf2;
+  --color-border-strong: #cbd5e1;
+  --color-text: #0b1220;
+  --color-text-muted: #54607a;
+
+  /* Semantic AA-verified pairs */
+  --color-success-fg: #14532d;
+  --color-success-bg: #dcfce7;
+  --color-warning-fg: #78350f;
+  --color-warning-bg: #fef3c7;
+  --color-danger-fg: #7f1d1d;
+  --color-danger-bg: #fee2e2;
+  --color-info-fg: #155e75;
+  --color-info-bg: #cffafe;
+
+  /* Sidebar + focus */
+  --color-sidebar-active-bg: color-mix(in oklab, #1ba8b8 14%, transparent);
+  --color-sidebar-active-bar: #1ba8b8;
+  --color-focus-ring: #36c5d2;
+
+  /* Spacing rhythm */
+  --space-card: 1.25rem;
+  --space-card-compact: 0.875rem;
+  --space-section: 2rem;
+  --container-page: 80rem;
+  --container-content: 72rem;
+  --container-reading: 42rem;
+
+  /* Shadows — light */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 1px rgba(15, 23, 42, 0.03);
+  --shadow-md: 0 4px 8px -2px rgba(15, 23, 42, 0.06), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 12px 24px -8px rgba(15, 23, 42, 0.1), 0 4px 8px -4px rgba(15, 23, 42, 0.05);
+  --shadow-xl: 0 24px 48px -12px rgba(15, 23, 42, 0.16), 0 8px 16px -8px rgba(15, 23, 42, 0.08);
 }
 
-/* Dark theme */
+@media (min-width: 768px) {
+  :root {
+    --space-section: 3rem;
+  }
+}
+
+/* Dark theme — layered surfaces (cards visibly lift from page bg), AA-tuned borders, dual-mode shadows */
 .dark {
-  --color-surface: #1e293b;
-  --color-muted: #0f172a;
-  --color-border: #334155;
-  --color-text: #f1f5f9;
-  --color-text-muted: #94a3b8;
+  --color-surface: #1a2736;
+  --color-surface-2: #213040;
+  --color-surface-sunk: #0e1722;
+  --color-muted: #070d14;
+  --color-border: #2a3a4f;
+  --color-border-strong: #3a4d66;
+  --color-text: #e8eef6;
+  --color-text-muted: #9aa8bd;
+
+  --color-success-fg: #86efac;
+  --color-success-bg: #0a2e18;
+  --color-warning-fg: #fbbf24;
+  --color-warning-bg: #2a1d05;
+  --color-danger-fg: #fca5a5;
+  --color-danger-bg: #2a0d0d;
+  --color-info-fg: #67e8f9;
+  --color-info-bg: #06303a;
+
+  --color-sidebar-active-bg: color-mix(in oklab, #1ba8b8 22%, transparent);
+  --color-sidebar-active-bar: #36c5d2;
+  --color-focus-ring: #aaeff2;
+
+  --shadow-sm: 0 0 0 1px rgba(255, 255, 255, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --shadow-md:
+    0 0 0 1px rgba(255, 255, 255, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 8px 16px -6px rgba(0, 0, 0, 0.6);
+  --shadow-lg:
+    0 0 0 1px rgba(255, 255, 255, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 18px 32px -10px rgba(0, 0, 0, 0.7);
+  --shadow-xl:
+    0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 32px 64px -16px rgba(0, 0, 0, 0.8);
 }
 
+/* Bridge CSS vars to Tailwind v4 utilities */
 @theme inline {
   --color-surface: var(--color-surface);
+  --color-surface-2: var(--color-surface-2);
+  --color-surface-sunk: var(--color-surface-sunk);
   --color-muted: var(--color-muted);
   --color-border: var(--color-border);
+  --color-border-strong: var(--color-border-strong);
   --color-text: var(--color-text);
   --color-text-muted: var(--color-text-muted);
+
+  --color-success-fg: var(--color-success-fg);
+  --color-success-bg: var(--color-success-bg);
+  --color-warning-fg: var(--color-warning-fg);
+  --color-warning-bg: var(--color-warning-bg);
+  --color-danger-fg: var(--color-danger-fg);
+  --color-danger-bg: var(--color-danger-bg);
+  --color-info-fg: var(--color-info-fg);
+  --color-info-bg: var(--color-info-bg);
+
+  --color-sidebar-active-bg: var(--color-sidebar-active-bg);
+  --color-sidebar-active-bar: var(--color-sidebar-active-bar);
+  --color-focus-ring: var(--color-focus-ring);
+
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+@keyframes progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+@keyframes check-draw {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes rotate-icon {
+  from {
+    transform: rotate(-90deg);
+    opacity: 0;
+  }
+  to {
+    transform: rotate(0deg);
+    opacity: 1;
+  }
+}
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 html,
@@ -64,4 +287,56 @@ body {
     color 0.2s ease;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Skip-to-main link */
+.skip-link {
+  position: absolute;
+  inset-inline-start: 0.5rem;
+  top: -40px;
+  z-index: 100;
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 0.5rem 0.875rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  font-weight: 600;
+  transition: top 150ms var(--ease-out-soft);
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  top: 0.5rem;
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Global focus polish */
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Reduced motion: kill animations system-wide */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Skeleton shimmer surface (used by .animate-shimmer applied to skeleton bg) */
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-sunk) 0%,
+    var(--color-border) 50%,
+    var(--color-surface-sunk) 100%
+  );
+  background-size: 200% 100%;
 }

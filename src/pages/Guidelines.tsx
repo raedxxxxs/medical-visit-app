@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
-import { Search, Plus, X, AlertCircle } from 'lucide-react'
-import { Input } from '@/components/ui/input'
+import { Plus, X, AlertCircle, BookOpen } from 'lucide-react'
+import { SearchInput } from '@/components/ui/search-input'
 import { Button } from '@/components/ui/button'
+import { SkeletonRow } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/ui/empty-state'
 import { useGuidelines } from '@/hooks/useGuidelines'
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '@/lib/guidelines'
 import { UploadGuideline } from '@/components/guidelines/UploadGuideline'
@@ -35,7 +37,7 @@ export function Guidelines() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-text">מאגר הנחיות</h2>
+          <h2 className="text-3xl font-bold tracking-tighter text-text">מאגר הנחיות</h2>
           <p className="text-text-muted">
             ניהול הנחיות קליניות לשימוש בייצור שבלונות
           </p>
@@ -48,31 +50,42 @@ export function Guidelines() {
 
       {showUpload && <UploadGuideline onDone={() => setShowUpload(false)} />}
 
-      <div className="relative">
-        <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
-        <Input
-          placeholder="חיפוש לפי כותרת, שם קובץ, או הערות..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pr-10"
-        />
-      </div>
+      <SearchInput
+        placeholder="חיפוש לפי כותרת, שם קובץ, או הערות..."
+        value={search}
+        onValueChange={setSearch}
+        aria-label="חיפוש הנחיות"
+      />
 
       {isLoading && (
-        <p className="text-text-muted">טוען...</p>
+        <div className="flex flex-col gap-2">
+          <SkeletonRow />
+          <SkeletonRow />
+        </div>
       )}
 
       {error && (
-        <div className="flex items-center gap-2 rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+        <div
+          role="alert"
+          className="flex items-center gap-2 rounded-[--radius-md] border border-[--color-danger-fg]/20 bg-[--color-danger-bg] p-3 text-sm text-[--color-danger-fg]"
+        >
           <AlertCircle className="h-4 w-4" />
           {error instanceof Error ? error.message : 'שגיאה בטעינת המאגר'}
         </div>
       )}
 
       {!isLoading && !error && (data?.length ?? 0) === 0 && (
-        <div className="rounded-lg border border-dashed border-border bg-surface p-8 text-center">
-          <p className="text-text-muted">המאגר ריק. הוסף הנחיה ראשונה.</p>
-        </div>
+        <EmptyState
+          icon={<BookOpen className="h-5 w-5" />}
+          title="המאגר ריק"
+          description="הוסף הנחיה ראשונה כדי שניתן יהיה להשתמש בה בייצור שבלונות."
+          action={
+            <Button size="sm" onClick={() => setShowUpload(true)}>
+              <Plus className="h-4 w-4" />
+              הוסף הנחיה
+            </Button>
+          }
+        />
       )}
 
       <div className="flex flex-col gap-6">
@@ -85,8 +98,14 @@ export function Guidelines() {
                 {CATEGORY_LABELS[cat]} ({items.length})
               </h3>
               <div className="flex flex-col gap-2">
-                {items.map((g) => (
-                  <GuidelineCard key={g.id} guideline={g} />
+                {items.map((g, i) => (
+                  <div
+                    key={g.id}
+                    className="animate-fade-in-up"
+                    style={{ animationDelay: `${Math.min(i, 6) * 40}ms` }}
+                  >
+                    <GuidelineCard guideline={g} />
+                  </div>
                 ))}
               </div>
             </section>

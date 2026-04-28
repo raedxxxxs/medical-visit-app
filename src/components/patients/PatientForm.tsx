@@ -2,7 +2,6 @@ import { useEffect } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -152,9 +151,10 @@ export function PatientForm({
   return (
     <form
       onSubmit={onSubmit}
-      className="flex flex-col gap-4 rounded-lg border border-border bg-surface p-6"
+      noValidate
+      className="flex flex-col gap-4 rounded-[--radius-md] border border-border bg-surface p-6 shadow-[--shadow-sm]"
     >
-      <h3 className="text-lg font-semibold text-text">
+      <h3 className="text-xl font-bold tracking-tight text-text">
         {isEdit ? `עריכת מטופל ${patient.patient_code}` : 'מטופל חדש'}
       </h3>
 
@@ -180,24 +180,41 @@ export function PatientForm({
 
       <div className="grid gap-3 md:grid-cols-3">
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-text">ראשי תיבות *</label>
-          <Input {...register('initials')} placeholder="א.ב." />
+          <label htmlFor="pf-initials" className="text-sm font-medium text-text">
+            ראשי תיבות <span aria-hidden className="text-[--color-danger-fg]">*</span>
+          </label>
+          <Input
+            id="pf-initials"
+            placeholder="א.ב."
+            aria-invalid={!!errors.initials}
+            aria-describedby={errors.initials ? 'pf-initials-err' : undefined}
+            {...register('initials')}
+          />
           {errors.initials && (
-            <span className="text-xs text-danger">
+            <span id="pf-initials-err" role="alert" className="text-xs font-medium text-[--color-danger-fg]">
               {errors.initials.message}
             </span>
           )}
         </div>
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-text">גיל</label>
-          <Input type="number" {...register('age')} placeholder="65" />
+          <label htmlFor="pf-age" className="text-sm font-medium text-text">גיל</label>
+          <Input
+            id="pf-age"
+            type="number"
+            placeholder="65"
+            aria-invalid={!!errors.age}
+            aria-describedby={errors.age ? 'pf-age-err' : undefined}
+            {...register('age')}
+          />
           {errors.age && (
-            <span className="text-xs text-danger">{errors.age.message}</span>
+            <span id="pf-age-err" role="alert" className="text-xs font-medium text-[--color-danger-fg]">
+              {errors.age.message}
+            </span>
           )}
         </div>
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-text">מין</label>
-          <Select {...register('gender')}>
+          <label htmlFor="pf-gender" className="text-sm font-medium text-text">מין</label>
+          <Select id="pf-gender" {...register('gender')}>
             <option value="">—</option>
             <option value="male">זכר</option>
             <option value="female">נקבה</option>
@@ -256,8 +273,7 @@ export function PatientForm({
       </div>
 
       <div className="flex gap-2">
-        <Button type="submit" disabled={isPending}>
-          {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+        <Button type="submit" loading={isPending}>
           {isEdit ? 'שמור שינויים' : 'הוסף מטופל'}
         </Button>
         {onCancel && (

@@ -64,7 +64,7 @@ export function Dialog({ open, onClose, title, children, className }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in"
       onClick={onClose}
       role="presentation"
     >
@@ -74,7 +74,7 @@ export function Dialog({ open, onClose, title, children, className }: Props) {
         aria-modal="true"
         aria-labelledby={title ? 'dialog-title' : undefined}
         className={cn(
-          'flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-border bg-surface shadow-xl',
+          'flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-[--radius-lg] border border-border bg-surface shadow-[--shadow-xl] animate-scale-in',
           className,
         )}
         onClick={(e) => e.stopPropagation()}

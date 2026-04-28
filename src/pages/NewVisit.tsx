@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, ArrowLeft, Save, Trash2, Loader2 } from 'lucide-react'
+import { ArrowRight, ArrowLeft, Save, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Breadcrumbs } from '@/components/layout/Breadcrumbs'
+import { toast } from '@/components/ui/toaster'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 import { useDraftVisit } from '@/hooks/useDraftVisit'
 import { useSaveVisit } from '@/hooks/useVisits'
 import { StepIndicator } from '@/components/visit/StepIndicator'
@@ -17,6 +20,7 @@ export function NewVisit() {
   const { draft, update, reset } = useDraftVisit()
   const save = useSaveVisit()
   const navigate = useNavigate()
+  const confirm = useConfirm()
 
   // Scroll to top whenever the step changes
   useEffect(() => {
@@ -47,23 +51,34 @@ export function NewVisit() {
     try {
       await save.mutateAsync(draft)
       reset()
+      toast.success('הביקור נשמר')
       navigate('/templates')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'שגיאה בשמירה')
+      const msg = err instanceof Error ? err.message : 'שגיאה בשמירה'
+      setError(msg)
+      toast.error(msg)
     }
   }
 
-  const handleDiscard = () => {
-    if (!confirm('למחוק את הטיוטה? הנתונים שהזנת יאבדו.')) return
+  const handleDiscard = async () => {
+    const ok = await confirm({
+      title: 'מחיקת טיוטה',
+      message: 'למחוק את הטיוטה? הנתונים שהזנת יאבדו.',
+      confirmLabel: 'מחק טיוטה',
+      danger: true,
+    })
+    if (!ok) return
     reset()
     setStep(1)
+    toast.success('הטיוטה נמחקה')
   }
 
   return (
     <div className="flex flex-col gap-6">
+      <Breadcrumbs items={[{ label: 'דשבורד', to: '/' }, { label: 'ביקור חדש' }]} />
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-text">ביקור חדש</h2>
+          <h2 className="text-3xl font-bold tracking-tighter text-text">ביקור חדש</h2>
           <p className="text-text-muted">
             הטיוטה נשמרת אוטומטית בדפדפן בכל שינוי
           </p>
@@ -76,12 +91,21 @@ export function NewVisit() {
 
       <StepIndicator current={step} />
 
-      {step === 1 && <Step1Patient draft={draft} update={update} />}
-      {step === 2 && <Step2Data draft={draft} update={update} />}
-      {step === 3 && <Step3Review draft={draft} update={update} />}
+      <div aria-live="polite" className="sr-only">
+        שלב {step} מתוך 3
+      </div>
+
+      <div key={step} className="animate-fade-in-up">
+        {step === 1 && <Step1Patient draft={draft} update={update} />}
+        {step === 2 && <Step2Data draft={draft} update={update} />}
+        {step === 3 && <Step3Review draft={draft} update={update} />}
+      </div>
 
       {error && (
-        <div className="rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+        <div
+          role="alert"
+          className="rounded-[--radius-md] border border-[--color-danger-fg]/20 bg-[--color-danger-bg] p-3 text-sm text-[--color-danger-fg]"
+        >
           {error}
         </div>
       )}
@@ -98,12 +122,8 @@ export function NewVisit() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
         ) : (
-          <Button onClick={handleSave} disabled={save.isPending}>
-            {save.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
+          <Button onClick={handleSave} loading={save.isPending}>
+            <Save className="h-4 w-4" />
             שמור ביקור
           </Button>
         )}

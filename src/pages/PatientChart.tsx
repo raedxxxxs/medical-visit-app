@@ -10,13 +10,15 @@ import {
   Copy,
   Check,
   FileText,
-  Loader2,
   Sparkles,
   Upload,
   X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { Progress } from '@/components/ui/progress'
+import { Breadcrumbs } from '@/components/layout/Breadcrumbs'
+import { toast } from '@/components/ui/toaster'
 import { useSummarizeChart } from '@/hooks/useSummarizeChart'
 import { cn } from '@/lib/utils'
 
@@ -101,8 +103,11 @@ export function PatientChart() {
     try {
       const res = await summarize.mutateAsync(files)
       setSummary(res.summary)
+      toast.success('הסיכום נוצר')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'שגיאה ביצירת הסיכום')
+      const msg = err instanceof Error ? err.message : 'שגיאה ביצירת הסיכום'
+      setError(msg)
+      toast.error(msg)
     }
   }
 
@@ -110,9 +115,10 @@ export function PatientChart() {
     try {
       await navigator.clipboard.writeText(summary)
       setCopied(true)
+      toast.success('הועתק')
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      alert('שגיאה בהעתקה')
+      toast.error('שגיאה בהעתקה')
     }
   }
 
@@ -124,17 +130,18 @@ export function PatientChart() {
 
   return (
     <div className="flex flex-col gap-6">
+      <Breadcrumbs items={[{ label: 'דשבורד', to: '/' }, { label: 'סיכום תיק מטופל' }]} />
       <div>
-        <h2 className="text-2xl font-bold text-text">סיכום תיק מטופל</h2>
+        <h2 className="text-3xl font-bold tracking-tighter text-text">סיכום תיק מטופל</h2>
         <p className="text-text-muted">
           העלה / הדבק תמונות של תיק רפואי — סיכומי ביקור, מרשמים, מכתבי שחרור,
           בדיקות. AI יסכם את כל התיק במבנה מסודר.
         </p>
       </div>
 
-      <section className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-6">
+      <section className="flex flex-col gap-3 rounded-[--radius-md] border border-border bg-surface p-6 shadow-[--shadow-sm]">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-lg font-semibold text-text">תמונות התיק</h3>
+          <h3 className="text-lg font-semibold tracking-tight text-text">תמונות התיק</h3>
           <div className="flex gap-2">
             <Button
               type="button"
@@ -215,21 +222,30 @@ export function PatientChart() {
         )}
 
         {error && (
-          <div className="rounded-md border border-danger/30 bg-danger/10 p-2 text-sm text-danger">
+          <div
+            role="alert"
+            className="rounded-[--radius-md] border border-[--color-danger-fg]/20 bg-[--color-danger-bg] p-2 text-sm text-[--color-danger-fg]"
+          >
             {error}
+          </div>
+        )}
+
+        {summarize.isPending && (
+          <div className="flex flex-col gap-2">
+            <Progress label="מעבד תמונות עם Claude AI" />
+            <p className="text-xs text-text-muted" aria-live="polite">
+              מסכם תיק... (עד דקה)
+            </p>
           </div>
         )}
 
         <Button
           onClick={handleSummarize}
-          disabled={summarize.isPending || files.length === 0}
+          loading={summarize.isPending}
+          disabled={files.length === 0}
           size="lg"
         >
-          {summarize.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Sparkles className="h-4 w-4" />
-          )}
+          <Sparkles className="h-4 w-4" />
           {summarize.isPending
             ? 'מסכם תיק... (עד דקה)'
             : 'צור סיכום תיק עם Claude AI'}
@@ -237,12 +253,12 @@ export function PatientChart() {
       </section>
 
       {summary && (
-        <section className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-6">
+        <section className="flex animate-fade-in-up flex-col gap-3 rounded-[--radius-md] border border-border bg-surface p-6 shadow-[--shadow-sm]">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-lg font-semibold text-text">הסיכום</h3>
+            <h3 className="text-lg font-semibold tracking-tight text-text">הסיכום</h3>
             <Button onClick={handleCopy} size="sm" variant="outline">
               {copied ? (
-                <Check className="h-4 w-4 text-success" />
+                <Check className="h-4 w-4 text-[--color-success-fg] animate-scale-in" />
               ) : (
                 <Copy className="h-4 w-4" />
               )}

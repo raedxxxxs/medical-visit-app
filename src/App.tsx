@@ -8,6 +8,7 @@ import { Login } from '@/pages/Login'
 import { Dashboard } from '@/pages/Dashboard'
 import { Guidelines } from '@/pages/Guidelines'
 import { Patients } from '@/pages/Patients'
+import { PatientDetail } from '@/pages/PatientDetail'
 import { NewVisit } from '@/pages/NewVisit'
 import { Templates } from '@/pages/Templates'
 import { PatientChart } from '@/pages/PatientChart'
@@ -29,6 +30,7 @@ export default function App() {
             <Route index element={<Dashboard />} />
             <Route path="guidelines" element={<Guidelines />} />
             <Route path="patients" element={<Patients />} />
+            <Route path="patients/:id" element={<PatientDetail />} />
             <Route path="visit/new" element={<NewVisit />} />
             <Route path="templates" element={<Templates />} />
             <Route path="chart" element={<PatientChart />} />

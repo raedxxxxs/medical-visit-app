@@ -1,21 +1,38 @@
 import { useMemo, useState } from 'react'
-import { Search, Plus, X, AlertCircle } from 'lucide-react'
-import { Input } from '@/components/ui/input'
+import { Plus, X, AlertCircle, Users } from 'lucide-react'
+import { SearchInput } from '@/components/ui/search-input'
 import { Button } from '@/components/ui/button'
+import { SkeletonRow } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/ui/empty-state'
 import { usePatients } from '@/hooks/usePatients'
+import { useVisits } from '@/hooks/useVisits'
 import { PatientForm } from '@/components/patients/PatientForm'
 import { PatientCard } from '@/components/patients/PatientCard'
+import {
+  CohortFilters,
+  EMPTY_COHORT,
+  isCohortActive,
+  useCohortState,
+} from '@/components/patients/CohortFilters'
 import { conditionLabel } from '@/lib/patients'
+import { patientMatchesCohort } from '@/lib/cohort'
 
 export function Patients() {
   const [search, setSearch] = useState('')
   const [showAdd, setShowAdd] = useState(false)
   const { data, isLoading, error } = usePatients()
+  const { data: visits } = useVisits()
+  const [cohort, setCohort] = useCohortState()
+
+  const matchedByCohort = useMemo(() => {
+    if (!isCohortActive(cohort)) return data ?? []
+    return (data ?? []).filter((p) => patientMatchesCohort(p, visits, cohort))
+  }, [data, visits, cohort])
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return data ?? []
+    if (!search.trim()) return matchedByCohort
     const q = search.toLowerCase()
-    return (data ?? []).filter((p) => {
+    return matchedByCohort.filter((p) => {
       if (p.patient_code.toLowerCase().includes(q)) return true
       if (p.initials?.toLowerCase().includes(q)) return true
       if (p.notes?.toLowerCase().includes(q)) return true
@@ -24,13 +41,13 @@ export function Patients() {
       if (p.medications?.some((m) => m.toLowerCase().includes(q))) return true
       return false
     })
-  }, [data, search])
+  }, [matchedByCohort, search])
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-text">מטופלים</h2>
+          <h2 className="text-3xl font-bold tracking-tighter text-text">מטופלים</h2>
           <p className="text-text-muted">
             ניהול מטופלים אנונימיים — ראשי תיבות בלבד
           </p>
@@ -48,38 +65,84 @@ export function Patients() {
         />
       )}
 
-      <div className="relative">
-        <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
-        <Input
-          placeholder="חיפוש לפי קוד / ראשי תיבות / מחלה / תרופה..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pr-10"
-        />
-      </div>
+      <SearchInput
+        placeholder="חיפוש לפי קוד / ראשי תיבות / מחלה / תרופה..."
+        value={search}
+        onValueChange={setSearch}
+        aria-label="חיפוש מטופלים"
+      />
 
-      {isLoading && <p className="text-text-muted">טוען...</p>}
+      <CohortFilters
+        state={cohort}
+        onChange={setCohort}
+        matchedCount={matchedByCohort.length}
+        totalCount={data?.length ?? 0}
+      />
+
+      {isLoading && (
+        <div className="flex flex-col gap-2">
+          <SkeletonRow />
+          <SkeletonRow />
+          <SkeletonRow />
+        </div>
+      )}
 
       {error && (
-        <div className="flex items-center gap-2 rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+        <div
+          role="alert"
+          className="flex items-center gap-2 rounded-[--radius-md] border border-[--color-danger-fg]/20 bg-[--color-danger-bg] p-3 text-sm text-[--color-danger-fg]"
+        >
           <AlertCircle className="h-4 w-4" />
           {error instanceof Error ? error.message : 'שגיאה בטעינה'}
         </div>
       )}
 
       {!isLoading && !error && (data?.length ?? 0) === 0 && (
-        <div className="rounded-lg border border-dashed border-border bg-surface p-8 text-center">
-          <p className="text-text-muted">אין מטופלים. הוסף מטופל ראשון.</p>
-        </div>
+        <EmptyState
+          icon={<Users className="h-5 w-5" />}
+          title="אין מטופלים"
+          description="הוסף את המטופל הראשון שלך כדי להתחיל."
+          action={
+            <Button size="sm" onClick={() => setShowAdd(true)}>
+              <Plus className="h-4 w-4" />
+              מטופל חדש
+            </Button>
+          }
+        />
       )}
 
       {!isLoading && (data?.length ?? 0) > 0 && filtered.length === 0 && (
-        <p className="text-text-muted">לא נמצאו מטופלים תואמים לחיפוש.</p>
+        <EmptyState
+          icon={<Users className="h-5 w-5" />}
+          title={
+            isCohortActive(cohort)
+              ? 'אין מטופלים שעונים על הסינון'
+              : 'לא נמצאו מטופלים תואמים'
+          }
+          description={
+            isCohortActive(cohort)
+              ? 'נסה להסיר חלק מהקריטריונים או לנקות את הסינון.'
+              : 'נסה חיפוש אחר.'
+          }
+          action={
+            isCohortActive(cohort) ? (
+              <Button size="sm" variant="outline" onClick={() => setCohort(EMPTY_COHORT)}>
+                נקה סינון
+              </Button>
+            ) : undefined
+          }
+        />
       )}
 
       <div className="flex flex-col gap-2">
-        {filtered.map((p) => (
-          <PatientCard key={p.id} patient={p} />
+        {filtered.map((p, i) => (
+          <div
+            key={p.id}
+            className="animate-fade-in-up"
+            style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
+          >
+            <PatientCard patient={p} />
+          </div>
         ))}
       </div>
     </div>

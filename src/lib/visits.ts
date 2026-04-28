@@ -58,6 +58,13 @@ export const TONE_LABELS: Record<Tone, string> = {
   educational: 'הסבר לימודי',
 }
 
+export interface TemplateVersion {
+  template: string
+  generated_at: string
+  tone: Tone
+  guidelines_used: string[]
+}
+
 export interface VisitDraft {
   patient_id: string | null
   visit_type: VisitType | null
@@ -69,6 +76,8 @@ export interface VisitDraft {
   guidelines_selected: string[]
   generated_template: string | null
   tone: Tone
+  template_versions: TemplateVersion[]
+  next_visit_due: string | null
 }
 
 export const SYMPTOM_OPTIONS = [
@@ -143,5 +152,92 @@ export function emptyDraft(): VisitDraft {
     guidelines_selected: [],
     generated_template: null,
     tone: 'standard',
+    template_versions: [],
+    next_visit_due: null,
   }
+}
+
+/**
+ * Critical clinical thresholds — values that warrant attention beyond plausibility.
+ * `critical` = urgent action consideration; `warning` = elevated risk.
+ */
+export type ClinicalLevel = 'critical' | 'warning'
+
+export interface ClinicalAlert {
+  level: ClinicalLevel
+  message: string
+}
+
+export function getClinicalAlert(key: string, raw: string): ClinicalAlert | null {
+  if (!raw || !raw.trim()) return null
+  const n = Number(raw.replace(',', '.'))
+  if (Number.isNaN(n)) return null
+
+  switch (key) {
+    case 'systolic_bp':
+      if (n >= 180) return { level: 'critical', message: 'יל"ד דרגה 3 — שקול הפניה דחופה' }
+      if (n >= 160) return { level: 'warning', message: 'יל"ד דרגה 2 — שקול הידוק טיפול' }
+      if (n < 90) return { level: 'critical', message: 'תת-לחץ דם — בדוק נפח/תרופות' }
+      return null
+    case 'diastolic_bp':
+      if (n >= 120) return { level: 'critical', message: 'יל"ד דיאסטולי קריטי — הפניה דחופה' }
+      if (n >= 100) return { level: 'warning', message: 'יל"ד דיאסטולי גבוה' }
+      if (n < 60) return { level: 'warning', message: 'תת-לחץ דיאסטולי' }
+      return null
+    case 'pulse':
+      if (n >= 130) return { level: 'critical', message: 'טכיקרדיה — בדוק סיבה' }
+      if (n < 45) return { level: 'critical', message: 'ברדיקרדיה — בדוק סיבה' }
+      return null
+    case 'glucose':
+      if (n >= 400) return { level: 'critical', message: 'היפרגליקמיה חמורה — שקול ER' }
+      if (n >= 250) return { level: 'warning', message: 'היפרגליקמיה — איזון לקוי' }
+      if (n < 70) return { level: 'critical', message: 'היפוגליקמיה — טפל מיד' }
+      return null
+    case 'hba1c':
+      if (n >= 10) return { level: 'critical', message: 'איזון סוכרת ירוד מאוד' }
+      if (n >= 8) return { level: 'warning', message: 'יעד HbA1c לא מושג — הידוק טיפול' }
+      return null
+    case 'ldl':
+      if (n >= 190) return { level: 'warning', message: 'LDL גבוה — בדוק היפרכולסטרולמיה משפחתית' }
+      if (n >= 160) return { level: 'warning', message: 'LDL גבוה — סטטין במינון מירבי' }
+      return null
+    case 'egfr':
+      if (n < 30) return { level: 'critical', message: 'CKD שלב 4 — הפניה לנפרולוג' }
+      if (n < 45) return { level: 'warning', message: 'CKD שלב 3b — התאמת מינוני תרופות' }
+      if (n < 60) return { level: 'warning', message: 'CKD שלב 3a — מעקב' }
+      return null
+    case 'creatinine':
+      if (n >= 2.0) return { level: 'critical', message: 'קריאטינין גבוה — בדוק eGFR' }
+      return null
+    case 'tsh':
+      if (n >= 10) return { level: 'warning', message: 'תת-פעילות בלוטת תריס' }
+      if (n < 0.1) return { level: 'warning', message: 'יתר-פעילות בלוטת תריס' }
+      return null
+    case 'bmi':
+      if (n >= 40) return { level: 'warning', message: 'השמנה דרגה 3' }
+      if (n < 18.5) return { level: 'warning', message: 'תת-משקל' }
+      return null
+    default:
+      return null
+  }
+}
+
+export const NEXT_VISIT_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: 'לא נקבע' },
+  { value: '1m', label: 'חודש' },
+  { value: '3m', label: '3 חודשים' },
+  { value: '6m', label: '6 חודשים' },
+  { value: '12m', label: '12 חודשים' },
+]
+
+export function computeNextVisitDate(option: string, from: Date = new Date()): string | null {
+  if (!option) return null
+  // Options look like "1m", "3m" — strip the suffix before parsing. Require the 'm'.
+  const match = option.match(/^(\d+)m$/)
+  if (!match) return null
+  const months = parseInt(match[1], 10)
+  if (Number.isNaN(months)) return null
+  const d = new Date(from)
+  d.setMonth(d.getMonth() + months)
+  return d.toISOString().slice(0, 10)
 }

@@ -1,7 +1,8 @@
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { LAB_BOUNDS, SYMPTOM_OPTIONS } from '@/lib/visits'
+import { LAB_BOUNDS, SYMPTOM_OPTIONS, getClinicalAlert } from '@/lib/visits'
 import type { LabValues, Vitals, VisitDraft } from '@/lib/visits'
+import { cn } from '@/lib/utils'
 import { LabImageUpload } from './LabImageUpload'
 
 interface Props {
@@ -66,6 +67,9 @@ export function Step2Data({ draft, update }: Props) {
   ) => {
     const bounds = LAB_BOUNDS[f.key]
     const outOfBounds = isOutOfBounds(f.key, value)
+    const clinical = getClinicalAlert(f.key, value)
+    const isCritical = clinical?.level === 'critical'
+    const isWarning = clinical?.level === 'warning' || (outOfBounds && !clinical)
     return (
       <div key={f.key} className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-text">
@@ -80,12 +84,28 @@ export function Step2Data({ draft, update }: Props) {
           max={bounds?.max}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className={
-            outOfBounds ? 'border-warning focus-visible:ring-warning' : ''
-          }
+          aria-invalid={isCritical || isWarning}
+          className={cn(
+            isCritical && 'border-[--color-danger-fg] focus-visible:ring-[--color-danger-fg]',
+            isWarning && 'border-[--color-warning-fg] focus-visible:ring-[--color-warning-fg]',
+          )}
         />
-        {outOfBounds && bounds && (
-          <span className="text-xs text-warning">
+        {clinical && (
+          <span
+            role="alert"
+            className={cn(
+              'flex items-center gap-1.5 rounded-[--radius-sm] px-2 py-1 text-xs font-medium',
+              isCritical
+                ? 'bg-[--color-danger-bg] text-[--color-danger-fg]'
+                : 'bg-[--color-warning-bg] text-[--color-warning-fg]',
+            )}
+          >
+            <span aria-hidden className="text-base leading-none">⚠</span>
+            <span>{clinical.message}</span>
+          </span>
+        )}
+        {!clinical && outOfBounds && bounds && (
+          <span className="text-xs text-[--color-warning-fg]">
             ערך חריג (טווח סביר: {bounds.min}–{bounds.max})
           </span>
         )}
@@ -97,8 +117,8 @@ export function Step2Data({ draft, update }: Props) {
     <div className="flex flex-col gap-4">
       <LabImageUpload draft={draft} update={update} />
 
-      <section className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-6">
-        <h3 className="text-lg font-semibold text-text">מדידות</h3>
+      <section className="flex flex-col gap-3 rounded-[--radius-md] border border-border bg-surface p-6 shadow-[--shadow-sm]">
+        <h3 className="text-xl font-bold tracking-tight text-text">מדידות</h3>
         <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
           {VITAL_FIELDS.map((f) =>
             renderField(f, draft.vitals[f.key] ?? '', (v) => setVital(f.key, v)),
@@ -106,8 +126,8 @@ export function Step2Data({ draft, update }: Props) {
         </div>
       </section>
 
-      <section className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-6">
-        <h3 className="text-lg font-semibold text-text">ערכי מעבדה</h3>
+      <section className="flex flex-col gap-3 rounded-[--radius-md] border border-border bg-surface p-6 shadow-[--shadow-sm]">
+        <h3 className="text-xl font-bold tracking-tight text-text">ערכי מעבדה</h3>
         <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
           {LAB_FIELDS.map((f) =>
             renderField(f, draft.labs[f.key] ?? '', (v) => setLab(f.key, v)),
@@ -115,8 +135,8 @@ export function Step2Data({ draft, update }: Props) {
         </div>
       </section>
 
-      <section className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-6">
-        <h3 className="text-lg font-semibold text-text">אנמנזה</h3>
+      <section className="flex flex-col gap-3 rounded-[--radius-md] border border-border bg-surface p-6 shadow-[--shadow-sm]">
+        <h3 className="text-xl font-bold tracking-tight text-text">אנמנזה</h3>
         <div>
           <label className="mb-2 block text-sm font-medium text-text">
             סימפטומים

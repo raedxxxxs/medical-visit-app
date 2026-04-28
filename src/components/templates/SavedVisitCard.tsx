@@ -1,8 +1,10 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileText, Eye, Copy, Trash2, Star, Loader2 } from 'lucide-react'
+import { FileText, Eye, Copy, Trash2, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { toast } from '@/components/ui/toaster'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 import {
   useDeleteVisit,
   useToggleVisitFavorite,
@@ -25,6 +27,7 @@ export function SavedVisitCard({ visit, onView, patient: patientProp }: Props) {
   const toggleFav = useToggleVisitFavorite()
   const { setDraft } = useDraftVisit()
   const navigate = useNavigate()
+  const confirm = useConfirm()
 
   // Prefer prop (parent already looked up); else fallback to find.
   const patient = useMemo(
@@ -32,9 +35,18 @@ export function SavedVisitCard({ visit, onView, patient: patientProp }: Props) {
     [patientProp, patients, visit.patient_id],
   )
 
-  const handleDelete = () => {
-    if (!confirm('למחוק את הביקור הזה? פעולה זו אינה הפיכה.')) return
-    del.mutate(visit.id)
+  const handleDelete = async () => {
+    const ok = await confirm({
+      title: 'מחיקת ביקור',
+      message: 'למחוק את הביקור הזה? פעולה זו אינה הפיכה.',
+      confirmLabel: 'מחק',
+      danger: true,
+    })
+    if (!ok) return
+    del.mutate(visit.id, {
+      onSuccess: () => toast.success('הביקור נמחק'),
+      onError: (e) => toast.error(e instanceof Error ? e.message : 'שגיאה במחיקה'),
+    })
   }
 
   const handleDuplicate = () => {
@@ -57,7 +69,10 @@ export function SavedVisitCard({ visit, onView, patient: patientProp }: Props) {
       guidelines_selected: visit.guidelines_used ?? [],
       generated_template: null,
       tone: 'standard',
+      template_versions: [],
+      next_visit_due: null,
     })
+    toast.success('הביקור שוכפל לטיוטה — מלא את הנתונים והפק שבלונה חדשה')
     navigate('/visit/new')
   }
 
@@ -65,7 +80,7 @@ export function SavedVisitCard({ visit, onView, patient: patientProp }: Props) {
     <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface p-3">
       <button
         onClick={() => onView(visit)}
-        className="flex min-w-0 flex-1 items-center gap-3 text-right"
+        className="flex min-w-0 flex-1 items-center gap-3 text-start"
       >
         <FileText className="h-5 w-5 shrink-0 text-primary-500" />
         <div className="min-w-0 flex-1">
@@ -134,15 +149,11 @@ export function SavedVisitCard({ visit, onView, patient: patientProp }: Props) {
           variant="ghost"
           size="sm"
           onClick={handleDelete}
-          disabled={del.isPending}
+          loading={del.isPending}
           title="מחק"
           aria-label="מחק ביקור"
         >
-          {del.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Trash2 className="h-4 w-4 text-danger" />
-          )}
+          <Trash2 className="h-4 w-4 text-[--color-danger-fg]" />
         </Button>
       </div>
     </div>

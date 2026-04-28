@@ -5,15 +5,20 @@ import { useTheme } from '@/hooks/useTheme'
 export function ThemeToggle() {
   const { theme, toggleTheme } = useTheme()
   const isDark = theme === 'dark'
+  const label = isDark ? 'מעבר למצב בהיר' : 'מעבר למצב כהה'
   return (
     <Button
       variant="ghost"
       size="sm"
       onClick={toggleTheme}
-      title={isDark ? 'מעבר למצב בהיר' : 'מעבר למצב כהה'}
-      aria-label={isDark ? 'מעבר למצב בהיר' : 'מעבר למצב כהה'}
+      title={label}
+      aria-label={label}
     >
-      {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+      {isDark ? (
+        <Sun key="sun" className="h-4 w-4 animate-rotate-icon" />
+      ) : (
+        <Moon key="moon" className="h-4 w-4 animate-rotate-icon" />
+      )}
     </Button>
   )
 }

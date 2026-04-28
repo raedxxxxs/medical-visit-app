@@ -1,0 +1,99 @@
+import type { Patient, Visit } from '@/types/database'
+import { getLatestLab } from '@/lib/lab-history'
+import type { CohortState, LabFilter, RecallFilter } from '@/components/patients/CohortFilters'
+
+interface LabRule {
+  key: string
+  predicate: (n: number) => boolean
+}
+
+const LAB_RULES: Record<LabFilter, LabRule> = {
+  'hba1c-gt-9': { key: 'hba1c', predicate: (n) => n > 9 },
+  'hba1c-gt-8': { key: 'hba1c', predicate: (n) => n > 8 },
+  'ldl-gt-130': { key: 'ldl', predicate: (n) => n > 130 },
+  'ldl-gt-100': { key: 'ldl', predicate: (n) => n > 100 },
+  'sbp-gt-160': { key: 'systolic_bp', predicate: (n) => n > 160 },
+  'sbp-gt-140': { key: 'systolic_bp', predicate: (n) => n > 140 },
+  'egfr-lt-60': { key: 'egfr', predicate: (n) => n < 60 },
+  'egfr-lt-30': { key: 'egfr', predicate: (n) => n < 30 },
+}
+
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function monthsBetween(fromIso: string, toIso: string): number {
+  const from = new Date(fromIso)
+  const to = new Date(toIso)
+  return (
+    (to.getFullYear() - from.getFullYear()) * 12 +
+    (to.getMonth() - from.getMonth())
+  )
+}
+
+export function patientMatchesCohort(
+  patient: Patient,
+  visits: Visit[] | undefined,
+  cohort: CohortState,
+): boolean {
+  // Conditions: patient must have ALL selected conditions (intersect).
+  if (cohort.conditions.length > 0) {
+    const has = patient.conditions ?? []
+    for (const c of cohort.conditions) {
+      if (!has.includes(c)) return false
+    }
+  }
+
+  // Labs: patient's latest value for each selected lab must satisfy predicate.
+  if (cohort.labs.length > 0) {
+    for (const lab of cohort.labs) {
+      const rule = LAB_RULES[lab]
+      const value = getLatestLab(visits, patient.id, rule.key)
+      if (value == null || !rule.predicate(value)) return false
+    }
+  }
+
+  // Recall states (multi-select = OR).
+  if (cohort.recall.length > 0) {
+    const matchAny = cohort.recall.some((r) =>
+      matchesRecall(patient, visits, r),
+    )
+    if (!matchAny) return false
+  }
+
+  return true
+}
+
+function matchesRecall(
+  patient: Patient,
+  visits: Visit[] | undefined,
+  rule: RecallFilter,
+): boolean {
+  const ownVisits = (visits ?? []).filter((v) => v.patient_id === patient.id)
+  if (rule === 'no-visit-ever') return ownVisits.length === 0
+
+  if (rule === 'no-visit-12m') {
+    if (ownVisits.length === 0) return true
+    const latestDate = ownVisits
+      .map((v) => v.visit_date)
+      .sort()
+      .pop()!
+    return monthsBetween(latestDate, todayISO()) >= 12
+  }
+
+  if (rule === 'overdue') {
+    let latestDue: string | null = null
+    let latestVisitDate = ''
+    for (const v of ownVisits) {
+      const due = (v.patient_data as { next_visit_due?: string } | null)
+        ?.next_visit_due
+      if (due && v.visit_date >= latestVisitDate) {
+        latestDue = due
+        latestVisitDate = v.visit_date
+      }
+    }
+    return latestDue !== null && latestDue <= todayISO()
+  }
+
+  return false
+}

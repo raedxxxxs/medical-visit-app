@@ -6,6 +6,7 @@ import { Upload, FileText, X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
+import { toast } from '@/components/ui/toaster'
 import { useUploadGuideline } from '@/hooks/useGuidelines'
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '@/lib/guidelines'
 import type { GuidelineCategory } from '@/types/database'
@@ -91,10 +92,12 @@ export function UploadGuideline({ onDone }: { onDone?: () => void }) {
       reset()
       setFile(null)
       setProgress(null)
+      toast.success('ההנחיה הועלתה')
       onDone?.()
     } catch (err) {
       const message = err instanceof Error ? err.message : 'שגיאה בהעלאה'
       setFileError(message)
+      toast.error(message)
     }
   }
 

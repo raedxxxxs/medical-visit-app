@@ -51,9 +51,9 @@ export function Sidebar({
       )}
       <aside
         className={cn(
-          // In RTL the sidebar lives on the right, so its content-facing edge is on the LEFT.
-          // border-l puts the visible border between sidebar and main content.
-          'fixed inset-y-0 right-0 z-40 w-60 shrink-0 border-l border-border bg-surface transition-transform md:static md:translate-x-0',
+          // In RTL the sidebar lives on the inline-start (right edge), so its content-facing edge
+          // is on the inline-end (left in RTL) — border-e draws that separator.
+          'fixed inset-y-0 start-0 z-40 w-60 shrink-0 border-e border-border bg-surface transition-transform md:static md:translate-x-0',
           isOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0',
         )}
       >
@@ -66,10 +66,10 @@ export function Sidebar({
               onClick={onClose}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  'relative flex items-center gap-3 rounded-[--radius-sm] px-3 py-2 text-sm font-medium transition-colors border-s-[3px]',
                   isActive
-                    ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/40 dark:text-primary-200'
-                    : 'text-text hover:bg-muted',
+                    ? 'bg-[--color-sidebar-active-bg] text-primary-700 dark:text-primary-200 border-[--color-sidebar-active-bar]'
+                    : 'text-text hover:bg-muted border-transparent',
                 )
               }
             >
