@@ -165,13 +165,13 @@ Deno.serve(async (req: Request) => {
     if (patient.age != null) patientLines.push(`גיל: ${patient.age}`)
     if (patient.gender) patientLines.push(`מין: ${patient.gender === 'male' ? 'זכר' : 'נקבה'}`)
     if (patient.conditions?.length) {
-      patientLines.push(`מחלות רקע: <conditions>${patient.conditions.join(', ')}</conditions>`)
+      patientLines.push(`מחלות רקע: <conditions>${xmlEscape(patient.conditions.join(', '))}</conditions>`)
     }
     if (patient.medications?.length) {
-      patientLines.push(`תרופות: <medications>${patient.medications.join(', ')}</medications>`)
+      patientLines.push(`תרופות: <medications>${xmlEscape(patient.medications.join(', '))}</medications>`)
     }
     if (patient.notes) {
-      patientLines.push(`הערות כלליות: <notes>${truncate(patient.notes, 1000)}</notes>`)
+      patientLines.push(`הערות כלליות: <notes>${xmlEscape(truncate(patient.notes, 1000))}</notes>`)
     }
 
     const historyLines: string[] = []
@@ -209,13 +209,13 @@ Deno.serve(async (req: Request) => {
         const freeText = (data?.anamnesis as { free_text?: string } | undefined)
           ?.free_text
         if (freeText) {
-          segment.push(`טקסט חופשי: <free_text>${truncate(freeText, 500)}</free_text>`)
+          segment.push(`טקסט חופשי: <free_text>${xmlEscape(truncate(freeText, 500))}</free_text>`)
         }
         if (v.generated_template) {
           const planMatch = v.generated_template.match(/##\s*המלצות[\s\S]+?(?=##|$)/)
           if (planMatch) {
             segment.push(
-              `המלצות מהביקור: <prior_plan>${truncate(planMatch[0].replace(/##\s*המלצות/, '').trim(), 600)}</prior_plan>`,
+              `המלצות מהביקור: <prior_plan>${xmlEscape(truncate(planMatch[0].replace(/##\s*המלצות/, '').trim(), 600))}</prior_plan>`,
             )
           }
         }
@@ -225,7 +225,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const safeReason = reason ? truncate(reason, 500) : ''
+    const safeReason = reason ? xmlEscape(truncate(reason, 500)) : ''
 
     const userPrompt = `# פרטי מטופל
 ${patientLines.join('\n')}
@@ -321,6 +321,16 @@ function json(body: unknown, status = 200): Response {
 function truncate(s: string, max: number): string {
   if (s.length <= max) return s
   return s.slice(0, max) + '…'
+}
+
+/**
+ * Escape user-controlled text before placing inside XML-tag wrappers.
+ * Prevents an attacker from breaking out of `<notes>...</notes>` by
+ * including a literal closing tag in their input.
+ * Replaces `<`, `>`, and `&` with their HTML entity equivalents.
+ */
+function xmlEscape(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
 /**

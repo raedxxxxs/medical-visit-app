@@ -73,15 +73,20 @@ export function Step3Review({ draft, update }: Props) {
         }
         summary = parts.join(', ')
       }
+      // Snapshot the prior template BEFORE awaiting Claude so we don't
+      // race with a concurrent edit. We only commit the version push if
+      // generation succeeds — failure leaves history untouched.
+      const priorTemplate = draft.generated_template
+      const priorTone = draft.tone
+      const priorGuidelines = [...draft.guidelines_selected]
       const res = await generate.mutateAsync({ draft, patient_summary: summary })
-      // Push the previous template (if any) onto the version history before replacing.
       const versions = [...(draft.template_versions ?? [])]
-      if (draft.generated_template) {
+      if (priorTemplate) {
         versions.unshift({
-          template: draft.generated_template,
+          template: priorTemplate,
           generated_at: new Date().toISOString(),
-          tone: draft.tone,
-          guidelines_used: [...draft.guidelines_selected],
+          tone: priorTone,
+          guidelines_used: priorGuidelines,
         })
       }
       update({
@@ -89,6 +94,7 @@ export function Step3Review({ draft, update }: Props) {
         template_versions: versions.slice(0, 10), // cap at 10 versions
       })
     } catch (err) {
+      // Generation failed — do NOT mutate version history.
       setGenError(err instanceof Error ? err.message : 'שגיאה ביצירה')
     }
   }

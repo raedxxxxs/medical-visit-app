@@ -52,6 +52,17 @@ export function Prep() {
       .filter((x): x is NonNullable<typeof x> => x !== null)
   }, [items, patients])
 
+  // Read all cached briefs in one pass instead of localStorage.getItem per
+  // row inside the render loop. Keyed by patient id for the current date.
+  // The `items` reference change is the only thing that should rebuild this.
+  const cachedBriefs = useMemo(() => {
+    const map: Record<string, ReturnType<typeof getCachedBrief>> = {}
+    for (const it of items) {
+      map[it.patient_id] = getCachedBrief(it.patient_id, date)
+    }
+    return map
+  }, [items, date])
+
   const summary = useMemo(() => {
     const total = queueWithPatients.length
     const prepped = queueWithPatients.filter((q) => q.item.prepped_at).length
@@ -148,7 +159,7 @@ export function Prep() {
           ) : (
             <ul className="flex flex-col gap-2">
               {queueWithPatients.map(({ item, patient }, i) => {
-                const cached = getCachedBrief(patient.id, date)
+                const cached = cachedBriefs[patient.id]
                 const isPrepped = !!item.prepped_at
                 return (
                   <li

@@ -22,13 +22,25 @@ function todayISO(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-function monthsBetween(fromIso: string, toIso: string): number {
-  const from = new Date(fromIso)
-  const to = new Date(toIso)
-  return (
-    (to.getFullYear() - from.getFullYear()) * 12 +
-    (to.getMonth() - from.getMonth())
-  )
+const MS_PER_DAY = 1000 * 60 * 60 * 24
+
+/**
+ * Calendar-day diff between two ISO yyyy-mm-dd strings, in UTC.
+ * `2025-12-31` → `2026-01-01` returns 1, not "1 month".
+ * Used for time-window cohort filters so year-end edge cases don't blow up.
+ *
+ * Returns Infinity (not NaN) on malformed input so cohort comparisons fail
+ * "old enough" rather than silently dropping a row.
+ */
+const ISO_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})/
+function daysBetween(fromIso: string, toIso: string): number {
+  const fm = ISO_DATE_RE.exec(fromIso)
+  const tm = ISO_DATE_RE.exec(toIso)
+  if (!fm || !tm) return Number.POSITIVE_INFINITY
+  const from = Date.UTC(+fm[1], +fm[2] - 1, +fm[3])
+  const to = Date.UTC(+tm[1], +tm[2] - 1, +tm[3])
+  if (Number.isNaN(from) || Number.isNaN(to)) return Number.POSITIVE_INFINITY
+  return Math.floor((to - from) / MS_PER_DAY)
 }
 
 export function patientMatchesCohort(
@@ -78,7 +90,8 @@ function matchesRecall(
       .map((v) => v.visit_date)
       .sort()
       .pop()!
-    return monthsBetween(latestDate, todayISO()) >= 12
+    // 365 days = 12 months threshold (handles year-end calendar edge cases).
+    return daysBetween(latestDate, todayISO()) >= 365
   }
 
   if (rule === 'overdue') {
