@@ -8,6 +8,7 @@ import {
   FileText,
   FolderHeart,
   ClipboardList,
+  HeartPulse,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -19,6 +20,7 @@ const navItems = [
   { to: '/visit/new', label: 'ביקור חדש', icon: FilePlus2 },
   { to: '/templates', label: 'שבלונות', icon: FileText },
   { to: '/chart', label: 'סיכום תיק מטופל', icon: FolderHeart },
+  { to: '/hospitalization', label: 'סיכום אשפוז', icon: HeartPulse },
 ]
 
 export function Sidebar({

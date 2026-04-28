@@ -8,6 +8,7 @@ import {
   FileText,
   FolderHeart,
   ClipboardList,
+  HeartPulse,
   Moon,
   Sun,
   User as UserIcon,
@@ -39,6 +40,7 @@ const STATIC_NAV: { id: string; path: string; label: string; icon: ComponentType
   { id: 'nav-visit', path: '/visit/new', label: 'ביקור חדש', icon: FilePlus2, keywords: 'new visit ביקור' },
   { id: 'nav-templates', path: '/templates', label: 'שבלונות שמורות', icon: FileText, keywords: 'templates' },
   { id: 'nav-chart', path: '/chart', label: 'סיכום תיק מטופל', icon: FolderHeart, keywords: 'chart summary' },
+  { id: 'nav-hospitalization', path: '/hospitalization', label: 'סיכום אשפוז', icon: HeartPulse, keywords: 'hospitalization discharge אשפוז שחרור' },
 ]
 
 export function CommandPalette() {

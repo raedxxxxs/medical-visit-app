@@ -14,6 +14,7 @@ import { PrepBrief } from '@/pages/PrepBrief'
 import { NewVisit } from '@/pages/NewVisit'
 import { Templates } from '@/pages/Templates'
 import { PatientChart } from '@/pages/PatientChart'
+import { Hospitalization } from '@/pages/Hospitalization'
 
 export default function App() {
   return (
@@ -38,6 +39,7 @@ export default function App() {
             <Route path="visit/new" element={<NewVisit />} />
             <Route path="templates" element={<Templates />} />
             <Route path="chart" element={<PatientChart />} />
+            <Route path="hospitalization" element={<Hospitalization />} />
           </Route>
         </Routes>
       </AuthProvider>

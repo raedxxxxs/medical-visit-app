@@ -12,16 +12,26 @@ async function fileToBase64(file: File): Promise<string> {
   return btoa(binary)
 }
 
+export type SummaryMode = 'chart' | 'hospitalization'
+
 export interface ChartSummaryResponse {
   summary: string
+  mode?: SummaryMode
   images_processed: number
   usage?: unknown
   model?: string
 }
 
-export function useSummarizeChart() {
+export function useSummarizeChart(defaultMode: SummaryMode = 'chart') {
   return useMutation({
-    mutationFn: async (files: File[]): Promise<ChartSummaryResponse> => {
+    mutationFn: async (
+      input: File[] | { files: File[]; mode?: SummaryMode },
+    ): Promise<ChartSummaryResponse> => {
+      const files = Array.isArray(input) ? input : input.files
+      const mode: SummaryMode = Array.isArray(input)
+        ? defaultMode
+        : input.mode ?? defaultMode
+
       const validImages = files.filter((f) => f.type.startsWith('image/'))
       if (validImages.length === 0) {
         throw new Error('יש לצרף לפחות תמונה אחת')
@@ -35,7 +45,7 @@ export function useSummarizeChart() {
 
       const { data, error } = await supabase.functions.invoke<ChartSummaryResponse>(
         'summarize-chart',
-        { body: { images } },
+        { body: { images, mode } },
       )
 
       if (error) {
