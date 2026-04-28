@@ -207,13 +207,28 @@ Deno.serve(async (req) => {
       text: getUserInstruction(mode),
     })
 
-    const anthropicRes = await callAnthropicWithRetry({
-      apiKey: anthropicKey,
-      model: ANTHROPIC_MODEL,
-      maxTokens: MAX_OUTPUT_TOKENS,
-      system: getSystemPrompt(mode),
-      content,
-    })
+    let anthropicRes: Response
+    try {
+      anthropicRes = await callAnthropicWithRetry({
+        apiKey: anthropicKey,
+        model: ANTHROPIC_MODEL,
+        maxTokens: MAX_OUTPUT_TOKENS,
+        system: getSystemPrompt(mode),
+        content,
+      })
+    } catch (e) {
+      const isAbort =
+        (e instanceof Error && e.name === 'AbortError') ||
+        (e instanceof DOMException && e.name === 'AbortError')
+      if (isAbort) {
+        console.error('Anthropic call timed out')
+        return json(
+          { error: 'הסיכום ארך זמן רב מדי. נסה עם פחות תמונות או תמונות קטנות יותר.' },
+          504,
+        )
+      }
+      throw e
+    }
 
     let claudeData: any
     try {
@@ -269,7 +284,7 @@ async function callAnthropicWithRetry(args: {
   system: string
   content: unknown[]
 }): Promise<Response> {
-  const TIMEOUT_MS = 25_000
+  const TIMEOUT_MS = 90_000
   const MAX_ATTEMPTS = 2
   let lastErr: unknown
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -308,6 +323,10 @@ async function callAnthropicWithRetry(args: {
     } catch (e) {
       clearTimeout(timer)
       lastErr = e
+      const isAbort =
+        (e instanceof Error && e.name === 'AbortError') ||
+        (e instanceof DOMException && e.name === 'AbortError')
+      if (isAbort) throw e
       if (attempt < MAX_ATTEMPTS) {
         await new Promise((r) => setTimeout(r, 1000 * 2 ** (attempt - 1)))
         continue
