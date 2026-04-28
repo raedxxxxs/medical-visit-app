@@ -9,6 +9,8 @@ import { Dashboard } from '@/pages/Dashboard'
 import { Guidelines } from '@/pages/Guidelines'
 import { Patients } from '@/pages/Patients'
 import { PatientDetail } from '@/pages/PatientDetail'
+import { Prep } from '@/pages/Prep'
+import { PrepBrief } from '@/pages/PrepBrief'
 import { NewVisit } from '@/pages/NewVisit'
 import { Templates } from '@/pages/Templates'
 import { PatientChart } from '@/pages/PatientChart'
@@ -28,6 +30,8 @@ export default function App() {
             }
           >
             <Route index element={<Dashboard />} />
+            <Route path="prep" element={<Prep />} />
+            <Route path="prep/:patientId" element={<PrepBrief />} />
             <Route path="guidelines" element={<Guidelines />} />
             <Route path="patients" element={<Patients />} />
             <Route path="patients/:id" element={<PatientDetail />} />

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { User, Pencil, Trash2, ChevronLeft } from 'lucide-react'
+import { User, Pencil, Trash2, ChevronLeft, ClipboardList } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -10,6 +10,7 @@ import { useVisits } from '@/hooks/useVisits'
 import { conditionLabel, genderLabel } from '@/lib/patients'
 import { getLatestEgfr } from '@/lib/lab-history'
 import { checkDrugWarnings } from '@/lib/drug-rules'
+import { usePrepQueue } from '@/lib/prep-queue'
 import { PatientForm } from './PatientForm'
 import { DrugWarnings } from './DrugWarnings'
 import type { Patient } from '@/types/database'
@@ -22,6 +23,13 @@ export function PatientCard({ patient }: { patient: Patient }) {
   const { data: visits } = useVisits()
   const egfr = getLatestEgfr(visits, patient.id)
   const drugWarnings = checkDrugWarnings(patient.medications, egfr)
+  const { items, addPatient } = usePrepQueue()
+  const inQueue = items.some((i) => i.patient_id === patient.id)
+
+  const handleAddToPrep = () => {
+    addPatient(patient.id)
+    toast.success(`${patient.full_name || patient.initials || patient.patient_code} נוסף לתור ההכנה להיום`)
+  }
 
   if (isEditing) {
     return (
@@ -58,10 +66,15 @@ export function PatientCard({ patient }: { patient: Patient }) {
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-sm font-semibold text-text">
+            <span className="font-mono text-sm font-semibold text-text-muted">
               {patient.patient_code}
             </span>
-            <span className="font-medium text-text">{patient.initials}</span>
+            <span className="font-medium text-text">
+              {patient.full_name || patient.initials}
+            </span>
+            {patient.full_name && patient.initials && (
+              <span className="text-xs text-text-muted">({patient.initials})</span>
+            )}
             {patient.age != null && (
               <span className="text-sm text-text-muted">· {patient.age}</span>
             )}
@@ -89,6 +102,17 @@ export function PatientCard({ patient }: { patient: Patient }) {
         </div>
       </div>
       <div className="flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={inQueue ? () => navigate('/prep') : handleAddToPrep}
+          title={inQueue ? 'בתור ההכנה — פתח' : 'הוסף לתור הכנה להיום'}
+          aria-label={inQueue ? 'פתח תור הכנה' : 'הוסף לתור הכנה'}
+        >
+          <ClipboardList
+            className={inQueue ? 'h-4 w-4 text-primary-600 dark:text-primary-300' : 'h-4 w-4'}
+          />
+        </Button>
         <Button
           variant="ghost"
           size="sm"

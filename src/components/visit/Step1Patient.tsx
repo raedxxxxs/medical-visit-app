@@ -48,7 +48,7 @@ export function Step1Patient({ draft, update }: Props) {
             <option value="">— בחר —</option>
             {patients?.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.patient_code} — {p.initials}
+                {p.patient_code} — {p.full_name || p.initials}
                 {p.age ? ` (${p.age})` : ''}
               </option>
             ))}

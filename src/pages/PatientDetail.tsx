@@ -10,6 +10,7 @@ import {
   Minus,
   Pill,
   AlertCircle,
+  Sparkles,
 } from 'lucide-react'
 import { Breadcrumbs } from '@/components/layout/Breadcrumbs'
 import { Button } from '@/components/ui/button'
@@ -138,15 +139,23 @@ export function PatientDetail() {
         items={[
           { label: 'דשבורד', to: '/' },
           { label: 'מטופלים', to: '/patients' },
-          { label: `${patient.patient_code} — ${patient.initials ?? ''}` },
+          {
+            label:
+              patient.full_name ||
+              `${patient.patient_code} — ${patient.initials ?? ''}`,
+          },
         ]}
       />
 
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h2 className="text-3xl font-bold tracking-tighter text-text">
-            {patient.patient_code} — {patient.initials}
+            {patient.full_name || patient.initials || patient.patient_code}
           </h2>
+          <p className="text-sm font-mono text-text-muted">
+            {patient.patient_code}
+            {patient.full_name && patient.initials && ` · ${patient.initials}`}
+          </p>
           <div className="flex flex-wrap items-center gap-2 text-sm text-text-muted">
             {patient.age != null && <span>גיל {patient.age}</span>}
             {patient.gender && <span>· {genderLabel(patient.gender)}</span>}
@@ -173,6 +182,13 @@ export function PatientDetail() {
           >
             <Pencil className="h-4 w-4" />
             ערוך
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => navigate(`/prep/${patient.id}`)}
+          >
+            <Sparkles className="h-4 w-4" />
+            הכן תדריך
           </Button>
           <Button onClick={() => navigate('/visit/new')}>
             <FileText className="h-4 w-4" />

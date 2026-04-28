@@ -32,6 +32,7 @@ function splitConditions(all: string[] | null | undefined): {
 }
 
 const schema = z.object({
+  full_name: z.string().max(120, 'שם ארוך מדי').optional(),
   initials: z.string().min(1, 'יש להזין ראשי תיבות').max(10),
   age: z
     .string()
@@ -80,6 +81,7 @@ export function PatientForm({
     defaultValues: (() => {
       const split = splitConditions(patient?.conditions)
       return {
+        full_name: patient?.full_name ?? '',
         initials: patient?.initials ?? '',
         age: patient?.age ? String(patient.age) : '',
         gender: (patient?.gender ?? '') as '' | 'male' | 'female',
@@ -104,6 +106,7 @@ export function PatientForm({
     const allConditions = [...raw.conditions, ...extraConditions]
 
     const payload = {
+      full_name: raw.full_name?.trim() || null,
       initials: raw.initials,
       age: ageStr ? parseInt(ageStr, 10) : null,
       gender: raw.gender === '' ? null : raw.gender,
@@ -128,6 +131,7 @@ export function PatientForm({
     if (!patient) return
     const split = splitConditions(patient.conditions)
     reset({
+      full_name: patient.full_name ?? '',
       initials: patient.initials ?? '',
       age: patient.age ? String(patient.age) : '',
       gender: (patient.gender ?? '') as '' | 'male' | 'female',
@@ -177,6 +181,28 @@ export function PatientForm({
             setValue('medications', ex.medications, { shouldDirty: true })
         }}
       />
+
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="pf-fullname" className="text-sm font-medium text-text">
+          שם מלא
+        </label>
+        <Input
+          id="pf-fullname"
+          placeholder="לדוגמה: אבי כהן"
+          aria-invalid={!!errors.full_name}
+          aria-describedby={errors.full_name ? 'pf-fullname-err' : 'pf-fullname-hint'}
+          {...register('full_name')}
+        />
+        {errors.full_name ? (
+          <span id="pf-fullname-err" role="alert" className="text-xs font-medium text-[--color-danger-fg]">
+            {errors.full_name.message}
+          </span>
+        ) : (
+          <span id="pf-fullname-hint" className="text-xs text-text-muted">
+            לשימושך הפרטי בהכנה לביקור. לא נשלח ל-AI ולא יופיע בשבלונה.
+          </span>
+        )}
+      </div>
 
       <div className="grid gap-3 md:grid-cols-3">
         <div className="flex flex-col gap-1.5">

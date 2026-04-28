@@ -340,3 +340,45 @@ body {
   );
   background-size: 200% 100%;
 }
+
+/* Print stylesheet — for the prep brief A4 output. */
+@media print {
+  /* Force light theme on print regardless of UI theme */
+  :root, .dark {
+    --color-surface: #ffffff;
+    --color-surface-2: #ffffff;
+    --color-surface-sunk: #ffffff;
+    --color-muted: #ffffff;
+    --color-border: #888888;
+    --color-text: #000000;
+    --color-text-muted: #444444;
+  }
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt;
+  }
+  /* Hide app shell — only the brief content prints */
+  header.sticky,
+  aside,
+  nav[aria-label='פירורי לחם'] {
+    display: none !important;
+  }
+  main {
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+  .skip-link {
+    display: none !important;
+  }
+  /* Avoid breaking sections across pages */
+  section, article {
+    page-break-inside: avoid;
+  }
+  a[href]::after {
+    content: '';
+  }
+  /* Tighter typography for paper */
+  h2 { font-size: 18pt !important; margin-bottom: 6pt !important; }
+  h3 { font-size: 13pt !important; margin-bottom: 4pt !important; }
+}

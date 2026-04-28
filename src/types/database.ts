@@ -36,6 +36,7 @@ export interface Patient {
   id: string
   user_id: string
   patient_code: string
+  full_name: string | null
   initials: string | null
   age: number | null
   gender: Gender | null

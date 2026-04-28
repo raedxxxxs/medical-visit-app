@@ -238,7 +238,8 @@ export function Dashboard() {
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-medium text-text">
                           {patient
-                            ? `${patient.patient_code} — ${patient.initials}`
+                            ? patient.full_name ||
+                              `${patient.patient_code} — ${patient.initials ?? ''}`
                             : '(מטופל לא ידוע)'}
                         </span>
                         <Badge>
@@ -303,7 +304,8 @@ export function Dashboard() {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-text">
                       {patient
-                        ? `${patient.patient_code} — ${patient.initials}`
+                        ? patient.full_name ||
+                          `${patient.patient_code} — ${patient.initials ?? ''}`
                         : '(מטופל לא ידוע)'}
                     </p>
                     <p className="text-xs text-text-muted">

@@ -58,6 +58,7 @@ export function useCreatePatient() {
         const { error } = await supabase.from('patients').insert({
           user_id: user.id,
           patient_code: code,
+          full_name: input.full_name,
           initials: input.initials,
           age: input.age,
           gender: input.gender,
@@ -88,6 +89,7 @@ export function useUpdatePatient() {
       const { error } = await supabase
         .from('patients')
         .update({
+          full_name: input.full_name,
           initials: input.initials,
           age: input.age,
           gender: input.gender,

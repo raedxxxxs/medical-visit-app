@@ -7,11 +7,13 @@ import {
   FilePlus2,
   FileText,
   FolderHeart,
+  ClipboardList,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navItems = [
   { to: '/', label: 'דשבורד', icon: LayoutDashboard },
+  { to: '/prep', label: 'הכנה לביקורים', icon: ClipboardList },
   { to: '/guidelines', label: 'מאגר הנחיות', icon: BookOpen },
   { to: '/patients', label: 'מטופלים', icon: Users },
   { to: '/visit/new', label: 'ביקור חדש', icon: FilePlus2 },

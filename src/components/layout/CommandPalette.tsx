@@ -7,6 +7,7 @@ import {
   FilePlus2,
   FileText,
   FolderHeart,
+  ClipboardList,
   Moon,
   Sun,
   User as UserIcon,
@@ -31,13 +32,14 @@ interface Command {
   run: () => void
 }
 
-const STATIC_NAV: Omit<Command, 'run'>[] = [
-  { id: 'nav-dashboard', label: 'דשבורד', icon: LayoutDashboard, keywords: 'home בית' },
-  { id: 'nav-guidelines', label: 'מאגר הנחיות', icon: BookOpen, keywords: 'guidelines' },
-  { id: 'nav-patients', label: 'מטופלים', icon: Users, keywords: 'patients' },
-  { id: 'nav-visit', label: 'ביקור חדש', icon: FilePlus2, keywords: 'new visit ביקור' },
-  { id: 'nav-templates', label: 'שבלונות שמורות', icon: FileText, keywords: 'templates' },
-  { id: 'nav-chart', label: 'סיכום תיק מטופל', icon: FolderHeart, keywords: 'chart summary' },
+const STATIC_NAV: { id: string; path: string; label: string; icon: ComponentType<LucideProps>; keywords?: string }[] = [
+  { id: 'nav-dashboard', path: '/', label: 'דשבורד', icon: LayoutDashboard, keywords: 'home בית' },
+  { id: 'nav-prep', path: '/prep', label: 'הכנה לביקורים', icon: ClipboardList, keywords: 'prep הכנה' },
+  { id: 'nav-guidelines', path: '/guidelines', label: 'מאגר הנחיות', icon: BookOpen, keywords: 'guidelines' },
+  { id: 'nav-patients', path: '/patients', label: 'מטופלים', icon: Users, keywords: 'patients' },
+  { id: 'nav-visit', path: '/visit/new', label: 'ביקור חדש', icon: FilePlus2, keywords: 'new visit ביקור' },
+  { id: 'nav-templates', path: '/templates', label: 'שבלונות שמורות', icon: FileText, keywords: 'templates' },
+  { id: 'nav-chart', path: '/chart', label: 'סיכום תיק מטופל', icon: FolderHeart, keywords: 'chart summary' },
 ]
 
 export function CommandPalette() {
@@ -76,16 +78,11 @@ export function CommandPalette() {
 
   const commands = useMemo<Command[]>(() => {
     const navCommands: Command[] = STATIC_NAV.map((c) => ({
-      ...c,
-      run: () => {
-        const path =
-          c.id === 'nav-dashboard'
-            ? '/'
-            : c.id === 'nav-visit'
-              ? '/visit/new'
-              : `/${c.id.replace('nav-', '')}`
-        navigate(path)
-      },
+      id: c.id,
+      label: c.label,
+      icon: c.icon,
+      keywords: c.keywords,
+      run: () => navigate(c.path),
     }))
 
     const themeCommand: Command = {
@@ -98,17 +95,11 @@ export function CommandPalette() {
 
     const patientCommands: Command[] = (patients ?? []).map((p) => ({
       id: `patient-${p.id}`,
-      label: `${p.patient_code} — ${p.initials ?? ''}`.trim(),
-      hint: 'התחל ביקור חדש למטופל',
+      label: p.full_name || `${p.patient_code} — ${p.initials ?? ''}`.trim(),
+      hint: p.full_name ? p.patient_code : 'התחל ביקור חדש למטופל',
       icon: UserIcon,
-      keywords: `${p.patient_code} ${p.initials ?? ''} ${p.medications?.join(' ') ?? ''}`,
-      run: () => {
-        setDraft({
-          ...draft,
-          patient_id: p.id,
-        })
-        navigate('/visit/new')
-      },
+      keywords: `${p.patient_code} ${p.full_name ?? ''} ${p.initials ?? ''} ${p.medications?.join(' ') ?? ''}`,
+      run: () => navigate(`/patients/${p.id}`),
     }))
 
     const visitCommands: Command[] = (visits ?? []).slice(0, 30).map((v) => {

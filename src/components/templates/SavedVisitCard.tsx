@@ -87,7 +87,8 @@ export function SavedVisitCard({ visit, onView, patient: patientProp }: Props) {
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium text-text">
               {patient
-                ? `${patient.patient_code} — ${patient.initials}`
+                ? patient.full_name ||
+                  `${patient.patient_code} — ${patient.initials ?? ''}`
                 : '(מטופל לא ידוע)'}
             </span>
             <Badge>
