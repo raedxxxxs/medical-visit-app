@@ -308,9 +308,29 @@ function normalizeMed(med: string): string {
   return med.toLowerCase().trim()
 }
 
+/**
+ * Word-boundary match. Avoids substring false positives like
+ * "glucagon".includes("gluco") matching glucophage rules, or
+ * "lipitor" matching anything containing "lipid".
+ *
+ * For Latin synonyms we use \b regex word boundaries.
+ * For Hebrew synonyms (א-ת) we use lookarounds against any non-letter.
+ */
 function medMatchesAny(med: string, synonyms: string[]): boolean {
   const m = normalizeMed(med)
-  return synonyms.some((syn) => m.includes(syn.toLowerCase()))
+  for (const synRaw of synonyms) {
+    const syn = synRaw.toLowerCase()
+    if (!syn) continue
+    // Hebrew detection: any char in Hebrew range
+    const isHebrew = /[א-ת]/.test(syn)
+    // Escape regex metacharacters in the synonym
+    const escaped = syn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const pattern = isHebrew
+      ? new RegExp(`(^|[^\\u05D0-\\u05EA])${escaped}([^\\u05D0-\\u05EA]|$)`, 'i')
+      : new RegExp(`(^|[^a-z])${escaped}([^a-z]|$)`, 'i')
+    if (pattern.test(m)) return true
+  }
+  return false
 }
 
 function medsMatchAny(meds: string[], synonyms: string[]): string | null {
@@ -358,20 +378,36 @@ export function checkDrugWarnings(
   }
 
   // Renal rules — fire only when eGFR known and below threshold.
+  // Collapse duplicate rules per drug: if two renal rules match the same drug
+  // (e.g., metformin <30 critical AND <45 warning), keep only the most severe.
   if (egfr != null && !Number.isNaN(egfr)) {
+    const severityRank: Record<DrugSeverity, number> = {
+      critical: 3,
+      warning: 2,
+      info: 1,
+    }
+    // Best match per drug: drug-name -> winning warning
+    const bestForDrug = new Map<string, DrugWarning>()
     for (const rule of RENAL_RULES) {
       if (egfr >= rule.egfrBelow) continue
       const matched = medsMatchAny(list, rule.drugSynonyms)
-      if (matched) {
-        out.push({
-          id: rule.id,
-          severity: rule.severity,
-          title: rule.title,
-          detail: rule.detail,
-          drugs: [matched],
-        })
+      if (!matched) continue
+      const candidate: DrugWarning = {
+        id: rule.id,
+        severity: rule.severity,
+        title: rule.title,
+        detail: rule.detail,
+        drugs: [matched],
+      }
+      const existing = bestForDrug.get(matched)
+      if (
+        !existing ||
+        severityRank[candidate.severity] > severityRank[existing.severity]
+      ) {
+        bestForDrug.set(matched, candidate)
       }
     }
+    for (const w of bestForDrug.values()) out.push(w)
   }
 
   return out

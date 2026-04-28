@@ -32,6 +32,8 @@ import {
   todayISO,
   usePrepQueue,
   getCachedBrief,
+  getCheckedItems,
+  setCheckedItems as persistCheckedItems,
   type PrepBriefData,
 } from '@/lib/prep-queue'
 import {
@@ -78,7 +80,16 @@ export function PrepBrief() {
   const generate = useGeneratePrepBrief()
   const [brief, setBrief] = useState<PrepBriefData | null>(null)
   const [generatedAt, setGeneratedAt] = useState<string | null>(null)
-  const [checkedItems, setCheckedItems] = useState<Set<number>>(new Set())
+  const [checkedItems, setCheckedItems] = useState<Set<number>>(() => {
+    if (!patientId) return new Set()
+    return new Set(getCheckedItems(patientId, date))
+  })
+
+  // Persist checked items so they survive navigation.
+  useEffect(() => {
+    if (!patientId) return
+    persistCheckedItems(patientId, date, Array.from(checkedItems))
+  }, [patientId, date, checkedItems])
 
   const patient = patients?.find((p) => p.id === patientId)
   const queueItem = items.find((i) => i.patient_id === patientId)

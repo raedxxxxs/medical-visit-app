@@ -45,8 +45,23 @@ function load(): VisitDraft {
 export function useDraftVisit() {
   const [draft, setDraft] = useState<VisitDraft>(load)
 
+  // Debounce localStorage writes to avoid thrashing on every keystroke.
+  // Latest draft is written 300ms after the last change; a flush on unmount
+  // ensures we never lose the in-flight value.
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(draft))
+    const handle = setTimeout(() => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(draft))
+    }, 300)
+    return () => clearTimeout(handle)
+  }, [draft])
+
+  // Flush on tab close so a typing user doesn't lose work.
+  useEffect(() => {
+    const onBeforeUnload = () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(draft))
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [draft])
 
   const update = useCallback((patch: Partial<VisitDraft>) => {

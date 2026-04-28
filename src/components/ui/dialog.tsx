@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, useId, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -13,13 +13,22 @@ interface Props {
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
+/**
+ * Module-level stack of open dialog ids. Only the topmost dialog handles
+ * Escape and Tab; nested dialogs (e.g. CommandPalette over ConfirmDialog)
+ * no longer race over the same global keydown.
+ */
+const dialogStack: string[] = []
+
 export function Dialog({ open, onClose, title, children, className }: Props) {
   const previousFocus = useRef<HTMLElement | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const dialogId = useId()
 
   useEffect(() => {
     if (!open) return
     previousFocus.current = document.activeElement as HTMLElement | null
+    dialogStack.push(dialogId)
 
     // Focus first focusable inside the dialog after render.
     queueMicrotask(() => {
@@ -30,11 +39,12 @@ export function Dialog({ open, onClose, title, children, className }: Props) {
     })
 
     const onKey = (e: KeyboardEvent) => {
+      // Only the topmost dialog responds to global keys.
+      if (dialogStack[dialogStack.length - 1] !== dialogId) return
       if (e.key === 'Escape') {
         onClose()
         return
       }
-      // Focus trap: keep Tab cycling inside the dialog
       if (e.key === 'Tab' && containerRef.current) {
         const focusable =
           containerRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
@@ -55,10 +65,13 @@ export function Dialog({ open, onClose, title, children, className }: Props) {
     document.body.style.overflow = 'hidden'
     return () => {
       document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = ''
+      const idx = dialogStack.lastIndexOf(dialogId)
+      if (idx !== -1) dialogStack.splice(idx, 1)
+      // Only restore body scroll when no dialogs remain.
+      if (dialogStack.length === 0) document.body.style.overflow = ''
       previousFocus.current?.focus?.()
     }
-  }, [open, onClose])
+  }, [open, onClose, dialogId])
 
   if (!open) return null
 

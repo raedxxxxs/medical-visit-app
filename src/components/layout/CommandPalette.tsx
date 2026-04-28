@@ -17,7 +17,6 @@ import { Dialog } from '@/components/ui/dialog'
 import { usePatients } from '@/hooks/usePatients'
 import { useVisits } from '@/hooks/useVisits'
 import { useTheme } from '@/hooks/useTheme'
-import { useDraftVisit } from '@/hooks/useDraftVisit'
 import { VISIT_TYPE_LABELS, type VisitType } from '@/lib/visits'
 import { cn } from '@/lib/utils'
 import type { ComponentType } from 'react'
@@ -51,7 +50,6 @@ export function CommandPalette() {
   const { data: patients } = usePatients()
   const { data: visits } = useVisits()
   const { theme, toggleTheme } = useTheme()
-  const { setDraft, draft } = useDraftVisit()
 
   // Open with Cmd/Ctrl+K
   useEffect(() => {
@@ -115,7 +113,9 @@ export function CommandPalette() {
     })
 
     return [...navCommands, themeCommand, ...patientCommands, ...visitCommands]
-  }, [patients, visits, theme, toggleTheme, navigate, setDraft, draft])
+    // Intentionally exclude `theme` and `toggleTheme` identity churn — only
+    // re-build when the data sources or navigate change.
+  }, [patients, visits, theme, toggleTheme, navigate])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()

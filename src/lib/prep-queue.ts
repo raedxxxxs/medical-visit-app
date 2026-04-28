@@ -172,3 +172,38 @@ export function setCachedBrief(
     // ignore
   }
 }
+
+/**
+ * Persist which action-item indices were checked off, keyed by patient + date.
+ * Survives navigation away from the prep brief without reloading the page.
+ */
+const CHECKED_ITEMS_KEY = 'prep-checked-items'
+
+export function getCheckedItems(patient_id: string, date: string): number[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(CHECKED_ITEMS_KEY)
+    if (!raw) return []
+    const map: Record<string, number[]> = JSON.parse(raw)
+    const arr = map[`${patient_id}:${date}`]
+    return Array.isArray(arr) ? arr.filter((n) => typeof n === 'number') : []
+  } catch {
+    return []
+  }
+}
+
+export function setCheckedItems(
+  patient_id: string,
+  date: string,
+  indices: number[],
+): void {
+  if (typeof window === 'undefined') return
+  try {
+    const raw = localStorage.getItem(CHECKED_ITEMS_KEY)
+    const map: Record<string, number[]> = raw ? JSON.parse(raw) : {}
+    map[`${patient_id}:${date}`] = indices
+    localStorage.setItem(CHECKED_ITEMS_KEY, JSON.stringify(map))
+  } catch {
+    // ignore
+  }
+}

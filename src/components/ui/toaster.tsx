@@ -6,7 +6,10 @@ export { toast }
 export function Toaster() {
   const { theme } = useTheme()
   return (
+    // `key` on theme forces Sonner to remount on toggle so the theme prop
+    // actually re-applies (Sonner caches it on mount otherwise).
     <SonnerToaster
+      key={theme}
       dir="rtl"
       position="top-left"
       richColors

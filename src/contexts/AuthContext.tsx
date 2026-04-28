@@ -19,6 +19,27 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
+/**
+ * All localStorage keys that hold user-scoped (and possibly identifiable)
+ * data. Cleared on sign-out / session expiry so a shared browser doesn't
+ * leak prep queues, cached briefs, drafts, or filter state to the next user.
+ */
+const USER_DATA_KEYS = [
+  'visit-draft',
+  'prep-queue',
+  'prep-brief-cache',
+  'prep-checked-items',
+  'cohort-filters',
+]
+
+function clearLocalUserData() {
+  try {
+    for (const key of USER_DATA_KEYS) localStorage.removeItem(key)
+  } catch {
+    // ignore — private mode / quota errors are non-fatal here.
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -34,11 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(newSession)
         // On any sign-out (explicit or session expiry), clear local user data.
         if (event === 'SIGNED_OUT' || newSession === null) {
-          try {
-            localStorage.removeItem('visit-draft')
-          } catch {
-            // ignore
-          }
+          clearLocalUserData()
         }
       },
     )
@@ -65,11 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
     // Clear any local user-scoped state so it doesn't leak to next user.
-    try {
-      localStorage.removeItem('visit-draft')
-    } catch {
-      // ignore
-    }
+    clearLocalUserData()
   }
 
   return (

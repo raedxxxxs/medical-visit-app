@@ -237,7 +237,14 @@ export function computeNextVisitDate(option: string, from: Date = new Date()): s
   if (!match) return null
   const months = parseInt(match[1], 10)
   if (Number.isNaN(months)) return null
-  const d = new Date(from)
-  d.setMonth(d.getMonth() + months)
+  // Use UTC arithmetic to avoid DST/timezone shifts, and clamp the day to the
+  // last valid day of the target month so Jan 31 + 1m = Feb 28/29, not Mar 3.
+  const year = from.getUTCFullYear()
+  const month = from.getUTCMonth() + months
+  const day = from.getUTCDate()
+  // Last day of the resulting month (day 0 of next month):
+  const lastDayOfTarget = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
+  const safeDay = Math.min(day, lastDayOfTarget)
+  const d = new Date(Date.UTC(year, month, safeDay))
   return d.toISOString().slice(0, 10)
 }
