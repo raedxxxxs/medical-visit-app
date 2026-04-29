@@ -3,7 +3,12 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-sans: 'Heebo', system-ui, -apple-system, sans-serif;
+  /* Dual-script stack: Inter handles Latin glyphs (drug names, labs, English UI),
+     Heebo takes over for Hebrew. Browsers auto-pick the first font that supports
+     each character — no JS needed. JetBrains Mono is for fixed-width contexts
+     (code, lab values where alignment matters). */
+  --font-sans: 'Inter', 'Heebo', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* Medical palette: teal-blue primary (unchanged) */
   --color-primary-50: #eefdfd;
@@ -133,7 +138,7 @@
   }
 }
 
-/* Dark theme — layered surfaces (cards visibly lift from page bg), AA-tuned borders, dual-mode shadows */
+/* Dark theme — layered surfaces (cards visibly lift from page bg), AA-tuned borders, dual-mode shadows. */
 .dark {
   --color-surface: #1a2736;
   --color-surface-2: #213040;
@@ -287,6 +292,43 @@ body {
     color 0.2s ease;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Subtle Latin letter spacing — not applied to Hebrew (no kerning impact). */
+  letter-spacing: -0.005em;
+}
+
+/* Soft radial highlight at the top of the viewport — gives the page a faint
+   "lit from above" gradient without affecting card contrast. Sits behind all
+   content via z-index, so utilities like bg-surface still paint over it. */
+.dark body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(
+      ellipse 80% 60% at 50% -10%,
+      rgba(54, 197, 210, 0.08) 0%,
+      transparent 60%
+    );
+}
+
+/* Embossed surface utility — opt-in class for cards that want a tactile feel.
+   Uses a tiny vertical gradient (top a hair lighter) plus an inset hairline,
+   so cards visibly lift in dark mode. Apply alongside bg-surface / .bg-surface. */
+.surface-elevated {
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--color-surface) 92%, white 8%) 0%,
+    var(--color-surface) 100%
+  );
+}
+.dark .surface-elevated {
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--color-surface) 92%, white 4%) 0%,
+    var(--color-surface) 100%
+  );
 }
 
 /* Skip-to-main link */

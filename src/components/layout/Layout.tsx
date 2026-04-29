@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
+import { AnimatePresence } from 'framer-motion'
 import { Header } from './Header'
 import { Sidebar } from './Sidebar'
 import { CommandPalette } from './CommandPalette'
 import { Toaster } from '@/components/ui/toaster'
 import { ConfirmProvider } from '@/components/ui/confirm-dialog'
+import { PageTransition } from '@/components/ui/motion'
 
 export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -32,9 +34,11 @@ export function Layout() {
             tabIndex={-1}
             className="flex-1 overflow-y-auto p-3 sm:p-6 outline-none"
           >
-            <div key={location.pathname} className="animate-fade-in">
-              <Outlet />
-            </div>
+            <AnimatePresence mode="wait" initial={false}>
+              <PageTransition key={location.pathname}>
+                <Outlet />
+              </PageTransition>
+            </AnimatePresence>
           </main>
         </div>
         <Toaster />
