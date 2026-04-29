@@ -6,20 +6,21 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { callAnthropic, AnthropicTimeoutError } from '../_shared/anthropic.ts'
 
-// Hospitalization summaries benefit from deeper clinical reasoning (extracting
-// medication changes, follow-up needs across many pages of discharge papers).
-// Use Opus 4.7 + a small thinking budget for that path; keep Sonnet for plain
-// chart summaries which are mostly transcription-shaped work.
+// Hospitalization summaries use Opus 4.7 for stronger clinical reasoning
+// across many pages of discharge papers; Sonnet for plain chart summaries
+// (mostly transcription-shaped work).
+//
+// Note: extended thinking was tried with Opus + streaming + base64 images
+// and consistently 502'd against Anthropic — removed for now. Opus alone
+// without thinking is still significantly stronger than Sonnet here.
 const MODEL_BY_MODE = {
   chart: 'claude-sonnet-4-6',
   hospitalization: 'claude-opus-4-7',
 } as const
-// max_tokens must exceed thinking.budget_tokens, hence the bump for opus path.
 const MAX_OUTPUT_TOKENS_BY_MODE = {
   chart: 4096,
   hospitalization: 6144,
 } as const
-const THINKING_BUDGET_HOSPITALIZATION = 2000
 const MAX_IMAGES = 20
 // Anthropic vision API caps base64 around 5MB per image. Reject earlier.
 const MAX_BASE64_PER_IMAGE = 5_400_000 // ~4MB raw
@@ -293,10 +294,6 @@ Deno.serve(async (req) => {
         content,
         timeoutMs: 120_000,
         stream: true,
-        thinking:
-          mode === 'hospitalization'
-            ? { type: 'enabled', budget_tokens: THINKING_BUDGET_HOSPITALIZATION }
-            : undefined,
       })
     } catch (e) {
       if (e instanceof AnthropicTimeoutError) {
@@ -318,11 +315,19 @@ Deno.serve(async (req) => {
       }
       console.error('Claude API error', anthropicRes.status, errBody)
       const status = anthropicRes.status === 429 ? 429 : 502
-      const safeMsg =
-        anthropicRes.status === 429
-          ? 'יותר מדי בקשות, נסה שוב בעוד רגע'
-          : 'שגיאה בשירות הסיכום'
-      return json({ error: safeMsg }, status)
+      // Surface Anthropic's actual error message so the client can show
+      // something useful instead of a generic 502. The original message is
+      // safe to expose — it's a developer/operational hint, not user data.
+      return json(
+        {
+          error:
+            anthropicRes.status === 429
+              ? 'יותר מדי בקשות, נסה שוב בעוד רגע'
+              : (errBody?.error?.message ?? 'שגיאה בשירות הסיכום'),
+          anthropic_status: anthropicRes.status,
+        },
+        status,
+      )
     }
 
     return new Response(anthropicRes.body, {
